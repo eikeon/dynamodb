@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 
 	"github.com/eikeon/aws4"
 )
@@ -19,6 +20,7 @@ func (db *DynamoDB) post(action string, parameters interface{}) (io.ReadCloser, 
 	if err := enc.Encode(parameters); err != nil {
 		return nil, err
 	}
+	//log.Println(buf.String())
 	if request, err := http.NewRequest("POST", url, &buf); err != nil {
 		return nil, err
 	} else {
@@ -60,9 +62,9 @@ type AttributeDefinition struct {
 }
 
 type DB interface {
-	CreateTable(name string, attributeDefinitions []AttributeDefinition, keySchema KeySchema)
+	CreateTable(name string, attributeDefinitions []AttributeDefinition, keySchema KeySchema, provisionedThroughput ProvisionedThroughput)
 	PutItem(tableName string, r interface{}) error
-	Scan(tableName string) ([]interface{}, error)
+	Scan(tableName string) (*ScanResponse, error)
 }
 
 type DynamoDB struct {
@@ -124,10 +126,79 @@ func (db *DynamoDB) DeleteTable(tableName string) error {
 	return err
 }
 
-func (b *DynamoDB) PutItem(tableName string, item interface{}) error {
-	panic("NYI")
+type Item map[string]map[string]string
+
+func (db *DynamoDB) PutItem(tableName string, item interface{}) error {
+	var it Item = make(map[string]map[string]string)
+	v := reflect.ValueOf(item)
+	switch v.Kind() {
+	case reflect.Struct:
+		num := v.NumField()
+		t := v.Type()
+		for i := 0; i < num; i++ {
+			f := v.Field(i)
+			switch f.Kind() {
+			case reflect.String:
+				it[t.Field(i).Name] = map[string]string{"S": f.String()}
+			default:
+				return errors.New("Unsupported field type error")
+			}
+		}
+	default:
+		return errors.New("Unsupported item type error")
+	}
+	reader, err := db.post("PutItem", struct {
+		TableName string
+		Item      Item
+	}{tableName, it})
+	// TODO: decode response
+	if reader != nil {
+		reader.Close()
+	}
+	return err
 }
 
-func (b *DynamoDB) Scan(tableName string) (items []interface{}, err error) {
-	panic("NYI")
+type ScanResponse interface {
+	Item(interface{}, int) error
+	GetScannedCount() int
+}
+
+type dbScanResponse struct {
+	Count        int64
+	ScannedCount int
+	Items        []Item
+}
+
+func (sr *dbScanResponse) GetScannedCount() int {
+	return sr.ScannedCount
+}
+
+func (sr *dbScanResponse) Item(item interface{}, i int) (err error) {
+	v := reflect.ValueOf(item)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Struct:
+		for kk, vv := range sr.Items[i] {
+			if value, ok := vv["S"]; ok {
+				f := v.FieldByName(kk)
+				f.SetString(value)
+			}
+		}
+	default:
+		return errors.New("Unsupported item type error")
+	}
+	return
+}
+
+func (db *DynamoDB) Scan(tableName string) (response ScanResponse, err error) {
+	reader, err := db.post("Scan", struct {
+		TableName string
+	}{tableName})
+	response = &dbScanResponse{}
+	if err = json.NewDecoder(reader).Decode(&response); err != nil {
+		return nil, err
+	}
+	return
 }
