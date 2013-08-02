@@ -8,16 +8,21 @@ import (
 	"."
 )
 
-func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
-	ddb := &dynamodb.DynamoDB{}
-	//ddb := &dynamodb.MemoryDB{}
+type Fetch struct {
+	URL string `db:"HASH"`
+}
 
-	if err := ddb.CreateTable("fetch", []dynamodb.AttributeDefinition{{AttributeName: "URL", AttributeType: "S"}}, dynamodb.KeySchema{dynamodb.KeySchemaElement{"URL", "HASH"}}, dynamodb.ProvisionedThroughput{1, 1}); err != nil {
+var FETCH *Fetch
+
+func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
+	d := &dynamodb.DynamoDB{} //d := &dynamodb.MemoryDB{}
+
+	if err := d.CreateTableFor(FETCH); err != nil {
 		t.Error(err)
 	}
 
 	for {
-		if description, err := ddb.DescribeTable("fetch"); err != nil {
+		if description, err := d.DescribeTableFor(FETCH); err != nil {
 			t.Error(err)
 		} else {
 			log.Println(description.Table.TableStatus)
@@ -28,13 +33,11 @@ func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	if err := ddb.PutItem("fetch", struct {
-		URL string
-	}{"http://localhost/"}); err != nil {
+	if err := d.Put(&Fetch{"http://localhost/"}); err != nil {
 		t.Error(err)
 	}
 
-	if response, err := ddb.Scan("fetch"); err != nil {
+	if response, err := d.ScanFor(FETCH); err != nil {
 		t.Error(err)
 	} else {
 		var item struct {
@@ -46,9 +49,9 @@ func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
 		}
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(60 * time.Second)
 
-	//if err := ddb.DeleteTable("fetch"); err != nil {
-	//	t.Error(err)
-	//}
+	if err := d.DeleteTableFor(FETCH); err != nil {
+		t.Error(err)
+	}
 }

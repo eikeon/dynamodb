@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"reflect"
 
@@ -62,9 +63,11 @@ type AttributeDefinition struct {
 }
 
 type DB interface {
-	CreateTable(name string, attributeDefinitions []AttributeDefinition, keySchema KeySchema, provisionedThroughput ProvisionedThroughput)
-	PutItem(tableName string, r interface{}) error
-	Scan(tableName string) (*ScanResponse, error)
+	CreateTableFor(s interface{})
+	DescribeTableFor(s interface{})
+	Put(item interface{}) error
+	ScanFor(s interface{}) (*ScanResponse, error)
+	DeleteTableFor(s interface{})
 }
 
 type DynamoDB struct {
@@ -81,6 +84,44 @@ func (b *DynamoDB) getClient() *aws4.Client {
 type ProvisionedThroughput struct {
 	ReadCapacityUnits  int
 	WriteCapacityUnits int
+}
+
+func (db *DynamoDB) CreateTableFor(i interface{}) error {
+	var primaryHash, primaryRange *KeySchemaElement
+	var attributeDefinitions []AttributeDefinition
+	var keySchema KeySchema
+	provisionedThroughput := ProvisionedThroughput{1, 1}
+
+	s := reflect.ValueOf(i).Type().Elem()
+
+	for i := 0; i < s.NumField(); i++ {
+		f := s.Field(i)
+		attributeType := ""
+		switch f.Type.Kind() {
+		case reflect.String:
+			attributeType = "S"
+		default:
+			return errors.New("attribute type not supported")
+		}
+		name := s.Field(i).Name
+		attributeDefinitions = append(attributeDefinitions, AttributeDefinition{name, attributeType})
+
+		tag := f.Tag.Get("db")
+		if tag == "HASH" {
+			primaryHash = &KeySchemaElement{name, "HASH"}
+		}
+	}
+
+	if primaryHash == nil {
+		return errors.New("no primary key hash specified")
+	} else {
+		keySchema = append(keySchema, *primaryHash)
+	}
+	if primaryRange != nil {
+		keySchema = append(keySchema, *primaryRange)
+	}
+
+	return db.CreateTable(s.Name(), attributeDefinitions, keySchema, provisionedThroughput)
 }
 
 func (db *DynamoDB) CreateTable(tableName string, attributeDefinitions []AttributeDefinition, keySchema []KeySchemaElement, provisionedThroughput ProvisionedThroughput) error {
@@ -102,6 +143,14 @@ type TableDescription struct {
 	}
 }
 
+func tableName(s interface{}) string {
+	return reflect.ValueOf(s).Type().Elem().Name()
+}
+
+func (db *DynamoDB) DescribeTableFor(item interface{}) (*TableDescription, error) {
+	return db.DescribeTable(tableName(item))
+}
+
 func (db *DynamoDB) DescribeTable(tableName string) (*TableDescription, error) {
 	reader, err := db.post("DescribeTable", struct {
 		TableName string
@@ -116,6 +165,10 @@ func (db *DynamoDB) DescribeTable(tableName string) (*TableDescription, error) {
 	return &description, err
 }
 
+func (db *DynamoDB) DeleteTableFor(s interface{}) error {
+	return db.DeleteTable(tableName(s))
+}
+
 func (db *DynamoDB) DeleteTable(tableName string) error {
 	reader, err := db.post("DeleteTable", struct {
 		TableName string
@@ -128,24 +181,25 @@ func (db *DynamoDB) DeleteTable(tableName string) error {
 
 type Item map[string]map[string]string
 
+func (db *DynamoDB) Put(item interface{}) error {
+	return db.PutItem(tableName(item), item)
+}
+
 func (db *DynamoDB) PutItem(tableName string, item interface{}) error {
 	var it Item = make(map[string]map[string]string)
-	v := reflect.ValueOf(item)
-	switch v.Kind() {
-	case reflect.Struct:
-		num := v.NumField()
-		t := v.Type()
-		for i := 0; i < num; i++ {
-			f := v.Field(i)
-			switch f.Kind() {
-			case reflect.String:
-				it[t.Field(i).Name] = map[string]string{"S": f.String()}
-			default:
-				return errors.New("Unsupported field type error")
-			}
+	s := reflect.ValueOf(item).Elem()
+	typeOfItem := s.Type()
+
+	for i := 0; i < s.NumField(); i++ {
+		f := s.Field(i)
+		name := typeOfItem.Field(i).Name
+		switch f.Type().Kind() {
+		case reflect.String:
+			it[name] = map[string]string{"S": f.Interface().(string)}
+		default:
+			return errors.New("attribute type not supported")
 		}
-	default:
-		return errors.New("Unsupported item type error")
+
 	}
 	reader, err := db.post("PutItem", struct {
 		TableName string
@@ -174,6 +228,7 @@ func (sr *dbScanResponse) GetScannedCount() int {
 }
 
 func (sr *dbScanResponse) Item(item interface{}, i int) (err error) {
+	//log.Println(s, reflect.New(s))
 	v := reflect.ValueOf(item)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -190,6 +245,10 @@ func (sr *dbScanResponse) Item(item interface{}, i int) (err error) {
 		return errors.New("Unsupported item type error")
 	}
 	return
+}
+
+func (db *DynamoDB) ScanFor(s interface{}) (response ScanResponse, err error) {
+	return db.Scan(tableName(s))
 }
 
 func (db *DynamoDB) Scan(tableName string) (response ScanResponse, err error) {
