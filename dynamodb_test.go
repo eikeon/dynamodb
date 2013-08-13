@@ -12,8 +12,6 @@ type Fetch struct {
 	URL string `db:"HASH"`
 }
 
-var FETCH *Fetch
-
 func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
 	for _, d := range []dynamodb.DynamoDB{dynamodb.NewMemoryDB(), dynamodb.NewDynamoDB()} {
 		d.Register("fetch", (*Fetch)(nil))
