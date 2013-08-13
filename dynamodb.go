@@ -49,6 +49,7 @@ type DynamoDB interface {
 	DescribeTable(tableName string) (*TableDescription, error)
 	DeleteTable(tableName string) error
 	PutItem(tableName string, item interface{}) error
+	GetItem(tableName string, key interface{}) (interface{}, error)
 	Scan(tableName string) (ScanResponse, error)
 }
 

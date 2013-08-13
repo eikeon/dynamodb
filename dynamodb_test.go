@@ -9,7 +9,8 @@ import (
 )
 
 type Fetch struct {
-	URL string `db:"HASH"`
+	URL         string `db:"HASH"`
+	RequestedOn string `json:",omitempty"`
 }
 
 func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
@@ -32,8 +33,18 @@ func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 
-		if err := d.PutItem("fetch", &Fetch{"http://localhost/"}); err != nil {
+		now := time.Now().Format(time.RFC3339Nano)
+		f := &Fetch{"http://localhost/", now}
+		if err := d.PutItem("fetch", f); err != nil {
 			t.Error(err)
+		}
+
+		time.Sleep(time.Second)
+
+		if f, err := d.GetItem("fetch", &Fetch{URL: "http://localhost/"}); err != nil {
+			t.Error(err)
+		} else {
+			log.Println("Got:", f)
 		}
 
 		if response, err := d.Scan("fetch"); err != nil {

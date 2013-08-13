@@ -8,6 +8,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"reflect"
+	"strconv"
+
+	"log"
 
 	"github.com/eikeon/aws4"
 )
@@ -130,6 +133,68 @@ func (db *dynamo) PutItem(tableName string, item interface{}) error {
 		reader.Close()
 	}
 	return err
+}
+
+func (db *dynamo) GetItem(tableName string, s interface{}) (interface{}, error) {
+	type AttributeValue map[string]string
+	type Key map[string]AttributeValue
+
+	key := make(Key)
+
+	sType := reflect.TypeOf(s).Elem()
+	sValue := reflect.ValueOf(s).Elem()
+
+	for i := 0; i < sValue.NumField(); i++ {
+		sf := sType.Field(i)
+		tag := sf.Tag.Get("db")
+		if tag == "HASH" || tag == "RANGE" {
+			fv := sValue.Field(i)
+			switch sf.Type.Kind() {
+			case reflect.String:
+				key[sf.Name] = AttributeValue{"S": fv.Interface().(string)}
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				key[sf.Name] = AttributeValue{"N": strconv.FormatInt(fv.Int(), 10)}
+			default:
+				return nil, errors.New("attribute type not supported")
+			}
+		}
+	}
+
+	reader, err := db.post("GetItem", struct {
+		TableName string
+		Key       Key
+	}{tableName, key})
+	if err != nil {
+		log.Fatal("GetItem:", err)
+	}
+
+	type GetItemResponse struct {
+		Item Item
+	}
+
+	response := &GetItemResponse{}
+	if err = json.NewDecoder(reader).Decode(&response); err != nil {
+		return nil, err
+	}
+
+	et := db.tableType[tableName]
+	v := reflect.New(et)
+	v = v.Elem()
+	switch v.Kind() {
+	case reflect.Struct:
+		for kk, vv := range response.Item {
+			if value, ok := vv["S"]; ok {
+				f := v.FieldByName(kk)
+				f.SetString(value)
+			}
+		}
+	default:
+		return nil, errors.New("Unsupported item type error")
+	}
+	if reader != nil {
+		reader.Close()
+	}
+	return v.Interface(), err
 }
 
 type Item map[string]map[string]string

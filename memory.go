@@ -69,6 +69,19 @@ func (b *memory) PutItem(tableName string, r interface{}) error {
 	return nil
 }
 
+func (b *memory) GetItem(tableName string, key interface{}) (interface{}, error) {
+	if b.tables == nil {
+		return nil, errors.New("no tables")
+	}
+	t, ok := b.tables[tableName]
+	if !ok {
+		return nil, errors.New("no such table")
+	}
+	v := reflect.ValueOf(key).Elem()
+	pk := v.FieldByName(t.definition.KeySchema[0].AttributeName).String()
+	return t.items[pk], nil
+}
+
 type mScanResponse struct {
 	table *table
 }
