@@ -84,6 +84,17 @@ func (db *dynamo) CreateTable(tableName string) error {
 	return err
 }
 
+func (db *dynamo) UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput) error {
+	reader, err := db.post("UpdateTable", struct {
+		TableName             string
+		ProvisionedThroughput ProvisionedThroughput
+	}{tableName, provisionedThroughput})
+	if reader != nil {
+		reader.Close()
+	}
+	return err
+}
+
 func (db *dynamo) DescribeTable(tableName string) (*TableDescription, error) {
 	reader, err := db.post("DescribeTable", struct {
 		TableName string

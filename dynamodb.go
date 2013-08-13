@@ -46,6 +46,7 @@ type DynamoDB interface {
 	Register(tableName string, i interface{})
 	TableType(tableName string) reflect.Type
 	CreateTable(tableName string) error
+	UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput) error
 	DescribeTable(tableName string) (*TableDescription, error)
 	DeleteTable(tableName string) error
 	PutItem(tableName string, item interface{}) error

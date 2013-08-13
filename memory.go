@@ -44,6 +44,10 @@ func (b *memory) CreateTable(name string) error {
 	return nil
 }
 
+func (db *memory) UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput) error {
+	return nil
+}
+
 func (db *memory) DescribeTable(tableName string) (*TableDescription, error) {
 	td := TableDescription{}
 	td.Table.TableStatus = "ACTIVE"
