@@ -5,7 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"."
+	_ "github.com/eikeon/dynamodb/driver/dynamo"
+	_ "github.com/eikeon/dynamodb/driver/memory"
+
+	"github.com/eikeon/dynamodb"
 )
 
 type Fetch struct {
@@ -15,43 +18,48 @@ type Fetch struct {
 var FETCH *Fetch
 
 func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
-	d := &dynamodb.DynamoDB{} //d := &dynamodb.MemoryDB{}
+	for _, driverName := range []string{"memory", "dynamo"} {
+		d, err := dynamodb.Open(driverName)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if err := d.CreateTableFor(FETCH); err != nil {
-		t.Error(err)
-	}
+		d.Register("fetch", (*Fetch)(nil))
 
-	for {
-		if description, err := d.DescribeTableFor(FETCH); err != nil {
+		if err := d.CreateTable("fetch"); err != nil {
+			t.Error(err)
+		}
+
+		for {
+			if description, err := d.DescribeTable("fetch"); err != nil {
+				t.Error(err)
+			} else {
+				log.Println(description.Table.TableStatus)
+				if description.Table.TableStatus == "ACTIVE" {
+					break
+				}
+			}
+			time.Sleep(time.Second)
+		}
+
+		if err := d.PutItem("fetch", &Fetch{"http://localhost/"}); err != nil {
+			t.Error(err)
+		}
+
+		if response, err := d.Scan("fetch"); err != nil {
 			t.Error(err)
 		} else {
-			log.Println(description.Table.TableStatus)
-			if description.Table.TableStatus == "ACTIVE" {
-				break
+			items := response.GetItems()
+			for i := 0; i < response.GetCount(); i++ {
+				item := items[i]
+				log.Println("item:", item)
 			}
 		}
-		time.Sleep(time.Second)
-	}
 
-	if err := d.Put(&Fetch{"http://localhost/"}); err != nil {
-		t.Error(err)
-	}
+		time.Sleep(10 * time.Second)
 
-	if response, err := d.ScanFor(FETCH); err != nil {
-		t.Error(err)
-	} else {
-		var item struct {
-			URL string
+		if err := d.DeleteTable("fetch"); err != nil {
+			t.Error(err)
 		}
-		for i := 0; i < response.GetScannedCount(); i++ {
-			response.Item(&item, i)
-			log.Println("item:", item)
-		}
-	}
-
-	time.Sleep(60 * time.Second)
-
-	if err := d.DeleteTableFor(FETCH); err != nil {
-		t.Error(err)
 	}
 }

@@ -2,97 +2,57 @@
 package dynamodb
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
-	"io"
-	"io/ioutil"
-	"log"
-	"net/http"
+	"fmt"
 	"reflect"
 
-	"github.com/eikeon/aws4"
+	"github.com/eikeon/dynamodb/driver"
 )
 
-func (db *DynamoDB) post(action string, parameters interface{}) (io.ReadCloser, error) {
-	url := "https://dynamodb.us-east-1.amazonaws.com/"
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	if err := enc.Encode(parameters); err != nil {
-		return nil, err
+// For the bits copied from Golang's database/sql/
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+var drivers = make(map[string]driver.Driver)
+
+// Register makes a database driver available by the provided name.
+// If Register is called twice with the same name or if driver is nil,
+// it panics.
+func Register(name string, driver driver.Driver) {
+	if driver == nil {
+		panic("sql: Register driver is nil")
 	}
-	//log.Println(buf.String())
-	if request, err := http.NewRequest("POST", url, &buf); err != nil {
-		return nil, err
-	} else {
-		request.Header.Set("Content-Type", "application/x-amz-json-1.0")
-		request.Header.Set("X-Amz-Target", "DynamoDB_20120810"+"."+action)
-
-		if response, err := db.getClient().Do(request); err == nil {
-			if response.StatusCode == 200 {
-				return response.Body, nil
-			} else {
-				b, err := ioutil.ReadAll(response.Body)
-				if err != nil {
-					return nil, err
-				}
-				return nil, errors.New(string(b))
-			}
-		} else {
-			return nil, err
-		}
+	if _, dup := drivers[name]; dup {
+		panic("sql: Register called twice for driver " + name)
 	}
-}
-
-type KeySchema []KeySchemaElement
-
-type Table struct {
-	TableName            string
-	KeySchema            KeySchema
-	AttributeDefinitions []AttributeDefinition
-}
-
-type KeySchemaElement struct {
-	AttributeName string
-	KeyType       string
-}
-
-type AttributeDefinition struct {
-	AttributeName string
-	AttributeType string
-}
-
-type DB interface {
-	CreateTableFor(s interface{})
-	DescribeTableFor(s interface{})
-	Put(item interface{}) error
-	ScanFor(s interface{}) (*ScanResponse, error)
-	DeleteTableFor(s interface{})
+	drivers[name] = driver
 }
 
 type DynamoDB struct {
-	client *aws4.Client
+	driver driver.Driver
 }
 
-func (b *DynamoDB) getClient() *aws4.Client {
-	if b.client == nil {
-		b.client = aws4.DefaultClient
+func Open(driverName string) (*DynamoDB, error) {
+	driveri, ok := drivers[driverName]
+	if !ok {
+		return nil, fmt.Errorf("dynamodb: unknown driver %q (forgotten import?)", driverName)
 	}
-	return b.client
+	return &DynamoDB{driveri}, nil
 }
 
-type ProvisionedThroughput struct {
-	ReadCapacityUnits  int
-	WriteCapacityUnits int
+func (db *DynamoDB) Register(name string, i interface{}) {
+	db.driver.Register(name, reflect.TypeOf(i).Elem())
 }
 
-func (db *DynamoDB) CreateTableFor(i interface{}) error {
-	var primaryHash, primaryRange *KeySchemaElement
-	var attributeDefinitions []AttributeDefinition
-	var keySchema KeySchema
-	provisionedThroughput := ProvisionedThroughput{1, 1}
+func (db *DynamoDB) CreateTable(tableName string) error {
+	var primaryHash, primaryRange *driver.KeySchemaElement
+	var attributeDefinitions []driver.AttributeDefinition
+	var keySchema driver.KeySchema
+	provisionedThroughput := driver.ProvisionedThroughput{1, 1}
 
-	s := reflect.ValueOf(i).Type().Elem()
+	s := db.driver.TableType(tableName)
+	//fmt.Println("s:", s)
 
 	for i := 0; i < s.NumField(); i++ {
 		f := s.Field(i)
@@ -104,11 +64,11 @@ func (db *DynamoDB) CreateTableFor(i interface{}) error {
 			return errors.New("attribute type not supported")
 		}
 		name := s.Field(i).Name
-		attributeDefinitions = append(attributeDefinitions, AttributeDefinition{name, attributeType})
+		attributeDefinitions = append(attributeDefinitions, driver.AttributeDefinition{name, attributeType})
 
 		tag := f.Tag.Get("db")
 		if tag == "HASH" {
-			primaryHash = &KeySchemaElement{name, "HASH"}
+			primaryHash = &driver.KeySchemaElement{name, "HASH"}
 		}
 	}
 
@@ -120,144 +80,21 @@ func (db *DynamoDB) CreateTableFor(i interface{}) error {
 	if primaryRange != nil {
 		keySchema = append(keySchema, *primaryRange)
 	}
-
-	return db.CreateTable(s.Name(), attributeDefinitions, keySchema, provisionedThroughput)
+	return db.driver.CreateTable(tableName, attributeDefinitions, keySchema, provisionedThroughput)
 }
 
-func (db *DynamoDB) CreateTable(tableName string, attributeDefinitions []AttributeDefinition, keySchema []KeySchemaElement, provisionedThroughput ProvisionedThroughput) error {
-	reader, err := db.post("CreateTable", struct {
-		TableName             string
-		AttributeDefinitions  []AttributeDefinition
-		KeySchema             []KeySchemaElement
-		ProvisionedThroughput ProvisionedThroughput
-	}{tableName, attributeDefinitions, keySchema, provisionedThroughput})
-	if reader != nil {
-		reader.Close()
-	}
-	return err
-}
-
-type TableDescription struct {
-	Table struct {
-		TableStatus string
-	}
-}
-
-func tableName(s interface{}) string {
-	return reflect.ValueOf(s).Type().Elem().Name()
-}
-
-func (db *DynamoDB) DescribeTableFor(item interface{}) (*TableDescription, error) {
-	return db.DescribeTable(tableName(item))
-}
-
-func (db *DynamoDB) DescribeTable(tableName string) (*TableDescription, error) {
-	reader, err := db.post("DescribeTable", struct {
-		TableName string
-	}{tableName})
-	var description TableDescription
-	if err = json.NewDecoder(reader).Decode(&description); err != nil {
-		return nil, err
-	}
-	if reader != nil {
-		reader.Close()
-	}
-	return &description, err
-}
-
-func (db *DynamoDB) DeleteTableFor(s interface{}) error {
-	return db.DeleteTable(tableName(s))
+func (db *DynamoDB) DescribeTable(tableName string) (*driver.TableDescription, error) {
+	return db.driver.DescribeTable(tableName)
 }
 
 func (db *DynamoDB) DeleteTable(tableName string) error {
-	reader, err := db.post("DeleteTable", struct {
-		TableName string
-	}{tableName})
-	if reader != nil {
-		reader.Close()
-	}
-	return err
-}
-
-type Item map[string]map[string]string
-
-func (db *DynamoDB) Put(item interface{}) error {
-	return db.PutItem(tableName(item), item)
+	return db.driver.DeleteTable(tableName)
 }
 
 func (db *DynamoDB) PutItem(tableName string, item interface{}) error {
-	var it Item = make(map[string]map[string]string)
-	s := reflect.ValueOf(item).Elem()
-	typeOfItem := s.Type()
-
-	for i := 0; i < s.NumField(); i++ {
-		f := s.Field(i)
-		name := typeOfItem.Field(i).Name
-		switch f.Type().Kind() {
-		case reflect.String:
-			it[name] = map[string]string{"S": f.Interface().(string)}
-		default:
-			return errors.New("attribute type not supported")
-		}
-
-	}
-	reader, err := db.post("PutItem", struct {
-		TableName string
-		Item      Item
-	}{tableName, it})
-	// TODO: decode response
-	if reader != nil {
-		reader.Close()
-	}
-	return err
+	return db.driver.PutItem(tableName, item)
 }
 
-type ScanResponse interface {
-	Item(interface{}, int) error
-	GetScannedCount() int
-}
-
-type dbScanResponse struct {
-	Count        int64
-	ScannedCount int
-	Items        []Item
-}
-
-func (sr *dbScanResponse) GetScannedCount() int {
-	return sr.ScannedCount
-}
-
-func (sr *dbScanResponse) Item(item interface{}, i int) (err error) {
-	//log.Println(s, reflect.New(s))
-	v := reflect.ValueOf(item)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	switch v.Kind() {
-	case reflect.Struct:
-		for kk, vv := range sr.Items[i] {
-			if value, ok := vv["S"]; ok {
-				f := v.FieldByName(kk)
-				f.SetString(value)
-			}
-		}
-	default:
-		return errors.New("Unsupported item type error")
-	}
-	return
-}
-
-func (db *DynamoDB) ScanFor(s interface{}) (response ScanResponse, err error) {
-	return db.Scan(tableName(s))
-}
-
-func (db *DynamoDB) Scan(tableName string) (response ScanResponse, err error) {
-	reader, err := db.post("Scan", struct {
-		TableName string
-	}{tableName})
-	response = &dbScanResponse{}
-	if err = json.NewDecoder(reader).Decode(&response); err != nil {
-		return nil, err
-	}
-	return
+func (db *DynamoDB) Scan(tableName string) (driver.ScanResponse, error) {
+	return db.driver.Scan(tableName)
 }
