@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/eikeon/dynamodb/driver/dynamo"
-	_ "github.com/eikeon/dynamodb/driver/memory"
-
 	"github.com/eikeon/dynamodb"
 )
 
@@ -18,12 +15,7 @@ type Fetch struct {
 var FETCH *Fetch
 
 func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
-	for _, driverName := range []string{"memory", "dynamo"} {
-		d, err := dynamodb.Open(driverName)
-		if err != nil {
-			t.Fatal(err)
-		}
-
+	for _, d := range []dynamodb.DynamoDB{dynamodb.NewMemoryDB(), dynamodb.NewDynamoDB()} {
 		d.Register("fetch", (*Fetch)(nil))
 
 		if err := d.CreateTable("fetch"); err != nil {

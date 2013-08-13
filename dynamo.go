@@ -1,4 +1,4 @@
-package dynamo
+package dynamodb
 
 import (
 	"bytes"
@@ -10,27 +10,25 @@ import (
 	"reflect"
 
 	"github.com/eikeon/aws4"
-	"github.com/eikeon/dynamodb"
-	"github.com/eikeon/dynamodb/driver"
 )
 
-func init() {
-	dynamodb.Register("dynamo", &DynamoDriver{})
-}
-
-type DynamoDriver struct {
+type dynamo struct {
 	client    *aws4.Client
 	tableType map[string]reflect.Type
 }
 
-func (b *DynamoDriver) getClient() *aws4.Client {
+func NewDynamoDB() DynamoDB {
+	return &dynamo{}
+}
+
+func (b *dynamo) getClient() *aws4.Client {
 	if b.client == nil {
 		b.client = aws4.DefaultClient
 	}
 	return b.client
 }
 
-func (db *DynamoDriver) post(action string, parameters interface{}) (io.ReadCloser, error) {
+func (db *dynamo) post(action string, parameters interface{}) (io.ReadCloser, error) {
 	url := "https://dynamodb.us-east-1.amazonaws.com/"
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -59,35 +57,35 @@ func (db *DynamoDriver) post(action string, parameters interface{}) (io.ReadClos
 	}
 }
 
-func (db *DynamoDriver) Register(tableName string, tableType reflect.Type) {
+func (db *dynamo) Register(tableName string, i interface{}) {
+	tableType := reflect.TypeOf(i).Elem()
 	if db.tableType == nil {
 		db.tableType = make(map[string]reflect.Type)
 	}
 	db.tableType[tableName] = tableType
 }
 
-func (db *DynamoDriver) TableType(tableName string) reflect.Type {
+func (db *dynamo) TableType(tableName string) reflect.Type {
 	return db.tableType[tableName]
 }
 
-func (db *DynamoDriver) CreateTable(tableName string, attributeDefinitions []driver.AttributeDefinition, keySchema driver.KeySchema, provisionedThroughput driver.ProvisionedThroughput) error {
-	reader, err := db.post("CreateTable", struct {
-		TableName             string
-		AttributeDefinitions  []driver.AttributeDefinition
-		KeySchema             []driver.KeySchemaElement
-		ProvisionedThroughput driver.ProvisionedThroughput
-	}{tableName, attributeDefinitions, keySchema, provisionedThroughput})
+func (db *dynamo) CreateTable(tableName string) error {
+	t, err := TableFor(tableName, db.TableType(tableName))
+	if err != nil {
+		return err
+	}
+	reader, err := db.post("CreateTable", t)
 	if reader != nil {
 		reader.Close()
 	}
 	return err
 }
 
-func (db *DynamoDriver) DescribeTable(tableName string) (*driver.TableDescription, error) {
+func (db *dynamo) DescribeTable(tableName string) (*TableDescription, error) {
 	reader, err := db.post("DescribeTable", struct {
 		TableName string
 	}{tableName})
-	var description driver.TableDescription
+	var description TableDescription
 	if err = json.NewDecoder(reader).Decode(&description); err != nil {
 		return nil, err
 	}
@@ -97,7 +95,7 @@ func (db *DynamoDriver) DescribeTable(tableName string) (*driver.TableDescriptio
 	return &description, err
 }
 
-func (db *DynamoDriver) DeleteTable(tableName string) error {
+func (db *dynamo) DeleteTable(tableName string) error {
 	reader, err := db.post("DeleteTable", struct {
 		TableName string
 	}{tableName})
@@ -107,7 +105,7 @@ func (db *DynamoDriver) DeleteTable(tableName string) error {
 	return err
 }
 
-func (db *DynamoDriver) PutItem(tableName string, item interface{}) error {
+func (db *dynamo) PutItem(tableName string, item interface{}) error {
 	var it Item = make(map[string]map[string]string)
 	s := reflect.ValueOf(item).Elem()
 	typeOfItem := s.Type()
@@ -155,7 +153,7 @@ func (sr *dbScanResponse) GetItems() []interface{} {
 	return sr.items
 }
 
-func (db *DynamoDriver) Scan(tableName string) (driver.ScanResponse, error) {
+func (db *dynamo) Scan(tableName string) (ScanResponse, error) {
 	et := db.tableType[tableName]
 	reader, err := db.post("Scan", struct {
 		TableName string

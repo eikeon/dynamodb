@@ -22,9 +22,10 @@ type ProvisionedThroughput struct {
 }
 
 type Table struct {
-	TableName            string
-	KeySchema            KeySchema
-	AttributeDefinitions []AttributeDefinition
+	TableName             string
+	KeySchema             KeySchema
+	AttributeDefinitions  []AttributeDefinition
+	ProvisionedThroughput ProvisionedThroughput
 }
 
 type TableDescription struct {
@@ -42,7 +43,7 @@ type ScanResponse interface {
 type Driver interface {
 	Register(tableName string, tableType reflect.Type)
 	TableType(tableName string) reflect.Type
-	CreateTable(tableName string, attributeDefinitions []AttributeDefinition, keySchema KeySchema, provisionedThroughput ProvisionedThroughput) error
+	CreateTable(tableName string) error
 	DescribeTable(tableName string) (*TableDescription, error)
 	DeleteTable(tableName string) error
 	PutItem(tableName string, item interface{}) error

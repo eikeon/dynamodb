@@ -3,57 +3,59 @@ package dynamodb
 import (
 	"errors"
 	"reflect"
-
-	"github.com/eikeon/dynamodb"
-	"github.com/eikeon/dynamodb/driver"
 )
 
 type table struct {
-	definition *driver.Table
+	definition *Table
 	items      map[string]interface{}
 }
 
-func init() {
-	dynamodb.Register("memory", &MemoryDriver{})
-}
-
-type MemoryDriver struct {
+type memory struct {
 	tables map[string]*table
 	types  map[string]reflect.Type
 }
 
-func (db *MemoryDriver) Register(tableName string, tableType reflect.Type) {
+func NewMemoryDB() DynamoDB {
+	return &memory{}
+}
+
+func (db *memory) Register(tableName string, i interface{}) {
+	tableType := reflect.TypeOf(i).Elem()
 	if db.types == nil {
 		db.types = make(map[string]reflect.Type)
 	}
 	db.types[tableName] = tableType
 }
 
-func (db *MemoryDriver) TableType(tableName string) reflect.Type {
+func (db *memory) TableType(tableName string) reflect.Type {
 	return db.types[tableName]
 }
 
-func (b *MemoryDriver) CreateTable(name string, attributeDefinitions []driver.AttributeDefinition, keySchema driver.KeySchema, provisionedThroughput driver.ProvisionedThroughput) error {
-	definition := driver.Table{name, keySchema, attributeDefinitions}
+func (b *memory) CreateTable(name string) error {
+	t, err := TableFor(name, b.TableType(name))
+	if err != nil {
+		return err
+	}
+	//definition := t //Table{name, keySchema, attributeDefinitions}
 	if b.tables == nil {
 		b.tables = make(map[string]*table)
 	}
-	b.tables[name] = &table{definition: &definition, items: make(map[string]interface{})}
+	b.tables[name] = &table{definition: t, items: make(map[string]interface{})}
 	return nil
 }
 
-func (db *MemoryDriver) DescribeTable(tableName string) (*driver.TableDescription, error) {
-	td := driver.TableDescription{}
+func (db *memory) DescribeTable(tableName string) (*TableDescription, error) {
+	td := TableDescription{}
 	td.Table.TableStatus = "ACTIVE"
 	return &td, nil
 }
 
-func (db *MemoryDriver) DeleteTable(tableName string) error {
+func (db *memory) DeleteTable(tableName string) error {
 	delete(db.tables, tableName)
 	return nil
 }
 
-func (b *MemoryDriver) PutItem(tableName string, r interface{}) error {
+func (b *memory) PutItem(tableName string, r interface{}) error {
 	if b.tables == nil {
 		return errors.New("no tables")
 	}
@@ -86,7 +88,7 @@ func (sr *mScanResponse) GetItems() (items []interface{}) {
 	return
 }
 
-func (b *MemoryDriver) Scan(tableName string) (scanResponse driver.ScanResponse, err error) {
+func (b *memory) Scan(tableName string) (scanResponse ScanResponse, err error) {
 	if b.tables == nil {
 		return nil, errors.New("no tables")
 	}
