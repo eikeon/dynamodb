@@ -64,6 +64,8 @@ func TableFor(tableName string, tableType reflect.Type) (*Table, error) {
 		switch f.Type.Kind() {
 		case reflect.String:
 			attributeType = "S"
+		case reflect.Int, reflect.Int64:
+			attributeType = "N"
 		default:
 			return nil, errors.New("attribute type not supported")
 		}
