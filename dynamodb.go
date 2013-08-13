@@ -70,10 +70,10 @@ func TableFor(tableName string, tableType reflect.Type) (*Table, error) {
 			return nil, errors.New("attribute type not supported")
 		}
 		name := tableType.Field(i).Name
-		attributeDefinitions = append(attributeDefinitions, AttributeDefinition{name, attributeType})
 
 		tag := f.Tag.Get("db")
 		if tag == "HASH" {
+			attributeDefinitions = append(attributeDefinitions, AttributeDefinition{name, attributeType})
 			primaryHash = &KeySchemaElement{name, "HASH"}
 		}
 	}
