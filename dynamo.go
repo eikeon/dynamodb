@@ -124,6 +124,9 @@ func (db *dynamo) UpdateTable(tableName string, provisionedThroughput Provisione
 		TableName             string
 		ProvisionedThroughput ProvisionedThroughput
 	}{tableName, provisionedThroughput})
+	if err != nil {
+		return err
+	}
 	if reader != nil {
 		reader.Close()
 	}
@@ -134,6 +137,9 @@ func (db *dynamo) DescribeTable(tableName string) (*TableDescription, error) {
 	reader, err := db.post("DescribeTable", struct {
 		TableName string
 	}{tableName})
+	if err != nil {
+		return nil, err
+	}
 	var description TableDescription
 	if err = json.NewDecoder(reader).Decode(&description); err != nil {
 		return nil, err
@@ -148,6 +154,9 @@ func (db *dynamo) DeleteTable(tableName string) error {
 	reader, err := db.post("DeleteTable", struct {
 		TableName string
 	}{tableName})
+	if err != nil {
+		return err
+	}
 	if reader != nil {
 		reader.Close()
 	}
@@ -174,6 +183,9 @@ func (db *dynamo) PutItem(tableName string, item interface{}) error {
 		TableName string
 		Item      Item
 	}{tableName, it})
+	if err != nil {
+		return err
+	}
 	// TODO: decode response
 	if reader != nil {
 		reader.Close()
@@ -269,6 +281,9 @@ func (db *dynamo) Scan(tableName string) (ScanResponse, error) {
 	reader, err := db.post("Scan", struct {
 		TableName string
 	}{tableName})
+	if err != nil {
+		return nil, err
+	}
 	response := &dbScanResponse{}
 	if err = json.NewDecoder(reader).Decode(&response); err != nil {
 		return nil, err
