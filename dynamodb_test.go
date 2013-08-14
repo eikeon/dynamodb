@@ -1,6 +1,7 @@
 package dynamodb_test
 
 import (
+	"fmt"
 	"log"
 	"testing"
 	"time"
@@ -33,18 +34,24 @@ func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 
-		now := time.Now().Format(time.RFC3339Nano)
-		f := &Fetch{"http://localhost/", now}
-		if err := d.PutItem("fetch", f); err != nil {
-			t.Error(err)
+		for j := 0; j < 100; j++ {
+			url := fmt.Sprintf("http://localhost/%d", j)
+			now := time.Now().Format(time.RFC3339Nano)
+			f := &Fetch{url, now}
+			if err := d.PutItem("fetch", f); err != nil {
+				t.Error(err)
+			}
 		}
 
 		time.Sleep(time.Second)
 
-		if f, err := d.GetItem("fetch", &Fetch{URL: "http://localhost/"}); err != nil {
-			t.Error(err)
-		} else {
-			log.Println("Got:", f)
+		for j := 0; j < 100; j++ {
+			url := fmt.Sprintf("http://localhost/%d", j)
+			if f, err := d.GetItem("fetch", &Fetch{URL: url}); err != nil {
+				t.Error(err)
+			} else {
+				log.Println("Got:", f)
+			}
 		}
 
 		if response, err := d.Scan("fetch"); err != nil {

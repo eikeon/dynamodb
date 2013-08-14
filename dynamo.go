@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
+	"math"
 	"net/http"
 	"reflect"
 	"strconv"
-
-	"log"
+	"time"
 
 	"github.com/eikeon/aws4"
 )
@@ -33,6 +35,9 @@ func (b *dynamo) getClient() *aws4.Client {
 
 func (db *dynamo) post(action string, parameters interface{}) (io.ReadCloser, error) {
 	url := "https://dynamodb.us-east-1.amazonaws.com/"
+	currentRetry := 0
+	maxNumberOfRetries := 10
+RETRY:
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	if err := enc.Encode(parameters); err != nil {
@@ -45,10 +50,31 @@ func (db *dynamo) post(action string, parameters interface{}) (io.ReadCloser, er
 		request.Header.Set("X-Amz-Target", "DynamoDB_20120810"+"."+action)
 
 		if response, err := db.getClient().Do(request); err == nil {
-			if response.StatusCode == 200 {
+			switch response.StatusCode {
+			case 200:
 				return response.Body, nil
-			} else {
+			case 400:
+				type ResponseError struct {
+					StatusCode int
+					Type       string `json:"__type"`
+					Message    string
+				}
+				var error ResponseError
+				if err = json.NewDecoder(response.Body).Decode(&error); err != nil {
+					return nil, err
+				}
+				response.Body.Close()
+				if error.Type == "com.amazonaws.dynamodb.v20120810#ProvisionedThroughputExceededException" {
+					log.Println("Provisioned throughput exceeded... retrying.")
+				} else {
+					return nil, errors.New(fmt.Sprintf("%#v", error))
+				}
+			case 500:
+				response.Body.Close()
+				log.Println("Got a 500 error... retrying.")
+			default:
 				b, err := ioutil.ReadAll(response.Body)
+				response.Body.Close()
 				if err != nil {
 					return nil, err
 				}
@@ -57,6 +83,15 @@ func (db *dynamo) post(action string, parameters interface{}) (io.ReadCloser, er
 		} else {
 			return nil, err
 		}
+		if currentRetry < maxNumberOfRetries {
+			wait := time.Duration(math.Pow(2, float64(currentRetry))) * 50 * time.Millisecond
+			time.Sleep(wait)
+			currentRetry = currentRetry + 1
+			goto RETRY
+		} else {
+			return nil, errors.New("exceeded maximum number of retries")
+		}
+
 	}
 }
 
@@ -176,7 +211,7 @@ func (db *dynamo) GetItem(tableName string, s interface{}) (interface{}, error) 
 		Key       Key
 	}{tableName, key})
 	if err != nil {
-		log.Fatal("GetItem:", err)
+		return nil, err
 	}
 
 	type GetItemResponse struct {
@@ -186,6 +221,9 @@ func (db *dynamo) GetItem(tableName string, s interface{}) (interface{}, error) 
 	response := &GetItemResponse{}
 	if err = json.NewDecoder(reader).Decode(&response); err != nil {
 		return nil, err
+	}
+	if reader != nil {
+		reader.Close()
 	}
 
 	et := db.tableType[tableName]
@@ -201,9 +239,6 @@ func (db *dynamo) GetItem(tableName string, s interface{}) (interface{}, error) 
 		}
 	default:
 		return nil, errors.New("Unsupported item type error")
-	}
-	if reader != nil {
-		reader.Close()
 	}
 	return v.Interface(), err
 }
@@ -237,6 +272,9 @@ func (db *dynamo) Scan(tableName string) (ScanResponse, error) {
 	response := &dbScanResponse{}
 	if err = json.NewDecoder(reader).Decode(&response); err != nil {
 		return nil, err
+	}
+	if reader != nil {
+		reader.Close()
 	}
 	for i := 0; i < response.Count; i++ {
 		v := reflect.New(et)
