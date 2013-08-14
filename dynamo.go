@@ -10,20 +10,18 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"reflect"
-	"strconv"
 	"time"
 
 	"github.com/eikeon/aws4"
 )
 
 type dynamo struct {
-	TableType
+	Tables
 	client *aws4.Client
 }
 
 func NewDynamoDB() DynamoDB {
-	return &dynamo{TableType: make(TableType)}
+	return &dynamo{Tables: make(Tables)}
 }
 
 func (b *dynamo) getClient() *aws4.Client {
@@ -150,26 +148,11 @@ func (db *dynamo) DeleteTable(tableName string) error {
 	return err
 }
 
-func (db *dynamo) PutItem(tableName string, item interface{}) error {
-	var it Item = make(map[string]map[string]string)
-	s := reflect.ValueOf(item).Elem()
-	typeOfItem := s.Type()
-
-	for i := 0; i < s.NumField(); i++ {
-		f := s.Field(i)
-		name := typeOfItem.Field(i).Name
-		switch f.Type().Kind() {
-		case reflect.String:
-			it[name] = map[string]string{"S": f.Interface().(string)}
-		default:
-			return errors.New("attribute type not supported")
-		}
-
-	}
+func (db *dynamo) PutItem(tableName string, item Item) error {
 	reader, err := db.post("PutItem", struct {
 		TableName string
 		Item      Item
-	}{tableName, it})
+	}{tableName, item})
 	if err != nil {
 		return err
 	}
@@ -180,41 +163,13 @@ func (db *dynamo) PutItem(tableName string, item interface{}) error {
 	return err
 }
 
-func (db *dynamo) GetItem(tableName string, s interface{}) (interface{}, error) {
-	type AttributeValue map[string]string
-	type Key map[string]AttributeValue
-
-	key := make(Key)
-
-	sType := reflect.TypeOf(s).Elem()
-	sValue := reflect.ValueOf(s).Elem()
-
-	for i := 0; i < sValue.NumField(); i++ {
-		sf := sType.Field(i)
-		tag := sf.Tag.Get("db")
-		if tag == "HASH" || tag == "RANGE" {
-			fv := sValue.Field(i)
-			switch sf.Type.Kind() {
-			case reflect.String:
-				key[sf.Name] = AttributeValue{"S": fv.Interface().(string)}
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				key[sf.Name] = AttributeValue{"N": strconv.FormatInt(fv.Int(), 10)}
-			default:
-				return nil, errors.New("attribute type not supported")
-			}
-		}
-	}
-
+func (db *dynamo) GetItem(tableName string, key Key) (*GetItemResponse, error) {
 	reader, err := db.post("GetItem", struct {
 		TableName string
 		Key       Key
 	}{tableName, key})
 	if err != nil {
 		return nil, err
-	}
-
-	type GetItemResponse struct {
-		Item Item
 	}
 
 	response := &GetItemResponse{}
@@ -225,74 +180,22 @@ func (db *dynamo) GetItem(tableName string, s interface{}) (interface{}, error) 
 		reader.Close()
 	}
 
-	et := db.TableType[tableName]
-	v := reflect.New(et)
-	v = v.Elem()
-	switch v.Kind() {
-	case reflect.Struct:
-		for kk, vv := range response.Item {
-			if value, ok := vv["S"]; ok {
-				f := v.FieldByName(kk)
-				f.SetString(value)
-			}
-		}
-	default:
-		return nil, errors.New("Unsupported item type error")
-	}
-	return v.Interface(), err
+	return response, err
 }
 
-type Item map[string]map[string]string
-
-type dbScanResponse struct {
-	Count        int
-	ScannedCount int
-	Items        []Item
-	items        []interface{}
-}
-
-func (sr *dbScanResponse) GetCount() int {
-	return sr.Count
-}
-
-func (sr *dbScanResponse) GetScannedCount() int {
-	return sr.ScannedCount
-}
-
-func (sr *dbScanResponse) GetItems() []interface{} {
-	return sr.items
-}
-
-func (db *dynamo) Scan(tableName string) (ScanResponse, error) {
-	et := db.TableType[tableName]
+func (db *dynamo) Scan(tableName string) (*ScanResponse, error) {
 	reader, err := db.post("Scan", struct {
 		TableName string
 	}{tableName})
 	if err != nil {
 		return nil, err
 	}
-	response := &dbScanResponse{}
+	response := &ScanResponse{}
 	if err = json.NewDecoder(reader).Decode(&response); err != nil {
 		return nil, err
 	}
 	if reader != nil {
 		reader.Close()
-	}
-	for i := 0; i < response.Count; i++ {
-		v := reflect.New(et)
-		v = v.Elem()
-		switch v.Kind() {
-		case reflect.Struct:
-			for kk, vv := range response.Items[i] {
-				if value, ok := vv["S"]; ok {
-					f := v.FieldByName(kk)
-					f.SetString(value)
-				}
-			}
-		default:
-			return nil, errors.New("Unsupported item type error")
-		}
-		response.items = append(response.items, v.Interface())
 	}
 	return response, nil
 }

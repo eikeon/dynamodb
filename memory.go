@@ -2,28 +2,24 @@ package dynamodb
 
 import (
 	"errors"
-	"reflect"
 )
 
-type table struct {
-	definition *Table
-	items      map[string]interface{}
-}
+type items map[string]Item
 
 type memory struct {
-	TableType
-	tables map[string]*table
+	Tables
+	tables map[string]items
 }
 
 func NewMemoryDB() DynamoDB {
-	return &memory{TableType: make(TableType)}
+	return &memory{Tables: make(Tables)}
 }
 
 func (b *memory) CreateTable(t *Table) error {
 	if b.tables == nil {
-		b.tables = make(map[string]*table)
+		b.tables = make(map[string]items)
 	}
-	b.tables[t.TableName] = &table{definition: t, items: make(map[string]interface{})}
+	b.tables[t.TableName] = make(items)
 	return nil
 }
 
@@ -42,7 +38,7 @@ func (db *memory) DeleteTable(tableName string) error {
 	return nil
 }
 
-func (b *memory) PutItem(tableName string, r interface{}) error {
+func (b *memory) PutItem(tableName string, item Item) error {
 	if b.tables == nil {
 		return errors.New("no tables")
 	}
@@ -50,13 +46,21 @@ func (b *memory) PutItem(tableName string, r interface{}) error {
 	if !ok {
 		return errors.New("no such table")
 	}
-	v := reflect.ValueOf(r).Elem()
-	pk := v.FieldByName(t.definition.KeySchema[0].AttributeName).String()
-	t.items[pk] = r
+	pk := ""
+	hash := b.Tables[tableName].KeySchema[0]
+	m := item[hash.AttributeName]
+	if len(m) == 1 {
+		for _, v := range m {
+			pk = v
+		}
+	} else {
+		panic("boo")
+	}
+	t[pk] = item
 	return nil
 }
 
-func (b *memory) GetItem(tableName string, key interface{}) (interface{}, error) {
+func (b *memory) GetItem(tableName string, key Key) (*GetItemResponse, error) {
 	if b.tables == nil {
 		return nil, errors.New("no tables")
 	}
@@ -64,37 +68,32 @@ func (b *memory) GetItem(tableName string, key interface{}) (interface{}, error)
 	if !ok {
 		return nil, errors.New("no such table")
 	}
-	v := reflect.ValueOf(key).Elem()
-	pk := v.FieldByName(t.definition.KeySchema[0].AttributeName).String()
-	return t.items[pk], nil
+
+	pk := ""
+	hash := b.Tables[tableName].KeySchema[0]
+	m := key[hash.AttributeName]
+	if len(m) == 1 {
+		for _, v := range m {
+			pk = v
+		}
+	} else {
+		panic("boo")
+	}
+
+	return &GetItemResponse{t[pk]}, nil
 }
 
-type mScanResponse struct {
-	table *table
-}
-
-func (sr *mScanResponse) GetCount() int {
-	return len(sr.table.items)
-}
-
-func (sr *mScanResponse) GetScannedCount() int {
-	return len(sr.table.items)
-}
-
-func (sr *mScanResponse) GetItems() (items []interface{}) {
-	for _, item := range sr.table.items {
+func (b *memory) Scan(tableName string) (scanResponse *ScanResponse, err error) {
+	if b.tables == nil {
+		return nil, errors.New("no tables")
+	}
+	t, ok := b.tables[tableName]
+	if !ok {
+		return nil, errors.New("no such table")
+	}
+	var items []Item
+	for _, item := range t {
 		items = append(items, item)
 	}
-	return
-}
-
-func (b *memory) Scan(tableName string) (scanResponse ScanResponse, err error) {
-	if b.tables == nil {
-		return nil, errors.New("no tables")
-	}
-	t, ok := b.tables[tableName]
-	if !ok {
-		return nil, errors.New("no such table")
-	}
-	return &mScanResponse{t}, nil
+	return &ScanResponse{Count: len(t), ScannedCount: len(t), Items: items}, nil
 }

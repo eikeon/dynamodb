@@ -41,7 +41,7 @@ func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
 			url := fmt.Sprintf("http://localhost/%d", j)
 			now := time.Now().Format(time.RFC3339Nano)
 			f := &Fetch{url, now}
-			if err := d.PutItem("fetch", f); err != nil {
+			if err := d.PutItem("fetch", d.ToItem(f)); err != nil {
 				t.Error(err)
 			}
 		}
@@ -50,19 +50,18 @@ func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
 
 		for j := 0; j < 100; j++ {
 			url := fmt.Sprintf("http://localhost/%d", j)
-			if f, err := d.GetItem("fetch", &Fetch{URL: url}); err != nil {
+			if f, err := d.GetItem("fetch", d.ToKey(&Fetch{URL: url})); err != nil {
 				t.Error(err)
 			} else {
-				log.Println("Got:", f)
+				log.Println("Got:", d.FromItem("fetch", f.Item))
 			}
 		}
 
 		if response, err := d.Scan("fetch"); err != nil {
 			t.Error(err)
 		} else {
-			items := response.GetItems()
-			for i := 0; i < response.GetCount(); i++ {
-				item := items[i]
+			for i := 0; i < response.Count; i++ {
+				item := d.FromItem("fetch", response.Items[i])
 				log.Println("item:", item)
 			}
 		}

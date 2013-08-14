@@ -4,6 +4,7 @@ package dynamodb
 import (
 	"errors"
 	"reflect"
+	"strconv"
 )
 
 type KeySchema []KeySchemaElement
@@ -28,6 +29,7 @@ type Table struct {
 	KeySchema             KeySchema
 	AttributeDefinitions  []AttributeDefinition
 	ProvisionedThroughput ProvisionedThroughput
+	tableType             reflect.Type
 }
 
 type TableDescription struct {
@@ -36,37 +38,48 @@ type TableDescription struct {
 	}
 }
 
-type ScanResponse interface {
-	GetCount() int
-	GetScannedCount() int
-	GetItems() []interface{}
+type Item map[string]map[string]string
+
+type GetItemResponse struct {
+	Item Item
+}
+
+type ScanResponse struct {
+	Count        int
+	ScannedCount int
+	Items        []Item
 }
 
 type DynamoDB interface {
 	Register(tableName string, i interface{}) (*Table, error)
+	ToItem(s interface{}) Item
+	ToKey(s interface{}) Key
+	FromItem(string, Item) interface{}
+
 	CreateTable(table *Table) error
 	UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput) error
 	DescribeTable(tableName string) (*TableDescription, error)
 	DeleteTable(tableName string) error
-	PutItem(tableName string, item interface{}) error
-	GetItem(tableName string, key interface{}) (interface{}, error)
-	Scan(tableName string) (ScanResponse, error)
+	PutItem(tableName string, item Item) error
+	GetItem(tableName string, key Key) (*GetItemResponse, error)
+	Scan(tableName string) (*ScanResponse, error)
 }
 
-type TableType map[string]reflect.Type
+type Tables map[string]*Table
 
-func (tt TableType) Register(tableName string, i interface{}) (*Table, error) {
+func (tt Tables) Register(tableName string, i interface{}) (*Table, error) {
 	tableType := reflect.TypeOf(i).Elem()
-	tt[tableName] = tableType
 
 	t, err := tt.tableFor(tableName, tableType)
 	if err != nil {
 		return nil, err
 	}
+
+	tt[tableName] = t
 	return t, nil
 }
 
-func (tt TableType) tableFor(tableName string, tableType reflect.Type) (*Table, error) {
+func (tt Tables) tableFor(tableName string, tableType reflect.Type) (*Table, error) {
 	var primaryHash, primaryRange *KeySchemaElement
 	var attributeDefinitions []AttributeDefinition
 	var keySchema KeySchema
@@ -100,5 +113,70 @@ func (tt TableType) tableFor(tableName string, tableType reflect.Type) (*Table, 
 	if primaryRange != nil {
 		keySchema = append(keySchema, *primaryRange)
 	}
-	return &Table{tableName, keySchema, attributeDefinitions, provisionedThroughput}, nil
+	return &Table{tableName, keySchema, attributeDefinitions, provisionedThroughput, tableType}, nil
+}
+
+func (tt Tables) ToItem(s interface{}) Item {
+	var it Item = make(map[string]map[string]string)
+	sValue := reflect.ValueOf(s).Elem()
+	typeOfItem := sValue.Type()
+
+	for i := 0; i < sValue.NumField(); i++ {
+		f := sValue.Field(i)
+		name := typeOfItem.Field(i).Name
+		switch f.Type().Kind() {
+		case reflect.String:
+			it[name] = map[string]string{"S": f.Interface().(string)}
+		default:
+			panic("attribute type not supported")
+		}
+
+	}
+	return it
+}
+
+type AttributeValue map[string]string
+type Key map[string]AttributeValue
+
+func (tt Tables) ToKey(s interface{}) Key {
+
+	key := make(Key)
+
+	sType := reflect.TypeOf(s).Elem()
+	sValue := reflect.ValueOf(s).Elem()
+
+	for i := 0; i < sValue.NumField(); i++ {
+		sf := sType.Field(i)
+		tag := sf.Tag.Get("db")
+		if tag == "HASH" || tag == "RANGE" {
+			fv := sValue.Field(i)
+			switch sf.Type.Kind() {
+			case reflect.String:
+				key[sf.Name] = AttributeValue{"S": fv.Interface().(string)}
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				key[sf.Name] = AttributeValue{"N": strconv.FormatInt(fv.Int(), 10)}
+			default:
+				panic("attribute type not supported")
+			}
+		}
+	}
+	return key
+}
+
+func (tt Tables) FromItem(tableName string, item Item) interface{} {
+	et := tt[tableName].tableType
+	v := reflect.New(et)
+	v = v.Elem()
+	switch v.Kind() {
+	case reflect.Struct:
+		for kk, vv := range item {
+			if value, ok := vv["S"]; ok {
+				f := v.FieldByName(kk)
+				f.SetString(value)
+			}
+		}
+	default:
+		panic("Unsupported item type error")
+	}
+	return v.Addr().Interface()
 }
