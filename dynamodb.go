@@ -43,9 +43,8 @@ type ScanResponse interface {
 }
 
 type DynamoDB interface {
-	Register(tableName string, i interface{})
-	TableType(tableName string) reflect.Type
-	CreateTable(tableName string) error
+	Register(tableName string, i interface{}) (*Table, error)
+	CreateTable(table *Table) error
 	UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput) error
 	DescribeTable(tableName string) (*TableDescription, error)
 	DeleteTable(tableName string) error

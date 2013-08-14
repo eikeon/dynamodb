@@ -19,28 +19,26 @@ func NewMemoryDB() DynamoDB {
 	return &memory{}
 }
 
-func (db *memory) Register(tableName string, i interface{}) {
+func (db *memory) Register(tableName string, i interface{}) (*Table, error) {
 	tableType := reflect.TypeOf(i).Elem()
 	if db.types == nil {
 		db.types = make(map[string]reflect.Type)
 	}
 	db.types[tableName] = tableType
-}
 
-func (db *memory) TableType(tableName string) reflect.Type {
-	return db.types[tableName]
-}
-
-func (b *memory) CreateTable(name string) error {
-	t, err := TableFor(name, b.TableType(name))
+	t, err := TableFor(tableName, tableType)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	//definition := t //Table{name, keySchema, attributeDefinitions}
+
+	return t, nil
+}
+
+func (b *memory) CreateTable(t *Table) error {
 	if b.tables == nil {
 		b.tables = make(map[string]*table)
 	}
-	b.tables[name] = &table{definition: t, items: make(map[string]interface{})}
+	b.tables[t.TableName] = &table{definition: t, items: make(map[string]interface{})}
 	return nil
 }
 

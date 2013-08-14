@@ -95,24 +95,25 @@ RETRY:
 	}
 }
 
-func (db *dynamo) Register(tableName string, i interface{}) {
+func (db *dynamo) Register(tableName string, i interface{}) (*Table, error) {
 	tableType := reflect.TypeOf(i).Elem()
 	if db.tableType == nil {
 		db.tableType = make(map[string]reflect.Type)
 	}
 	db.tableType[tableName] = tableType
+
+	t, err := TableFor(tableName, tableType)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
 }
 
-func (db *dynamo) TableType(tableName string) reflect.Type {
-	return db.tableType[tableName]
-}
-
-func (db *dynamo) CreateTable(tableName string) error {
-	t, err := TableFor(tableName, db.TableType(tableName))
+func (db *dynamo) CreateTable(table *Table) error {
+	reader, err := db.post("CreateTable", table)
 	if err != nil {
 		return err
 	}
-	reader, err := db.post("CreateTable", t)
 	if reader != nil {
 		reader.Close()
 	}

@@ -16,9 +16,12 @@ type Fetch struct {
 
 func TestCreateTablePutItemScanDeleteTable(t *testing.T) {
 	for _, d := range []dynamodb.DynamoDB{dynamodb.NewMemoryDB(), dynamodb.NewDynamoDB()} {
-		d.Register("fetch", (*Fetch)(nil))
+		table, err := d.Register("fetch", (*Fetch)(nil))
+		if err != nil {
+			t.Error(err)
+		}
 
-		if err := d.CreateTable("fetch"); err != nil {
+		if err := d.CreateTable(table); err != nil {
 			t.Error(err)
 		}
 
