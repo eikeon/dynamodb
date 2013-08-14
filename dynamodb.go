@@ -103,6 +103,10 @@ func (tt Tables) tableFor(tableName string, tableType reflect.Type) (*Table, err
 			attributeDefinitions = append(attributeDefinitions, AttributeDefinition{name, attributeType})
 			primaryHash = &KeySchemaElement{name, "HASH"}
 		}
+		if tag == "RANGE" {
+			attributeDefinitions = append(attributeDefinitions, AttributeDefinition{name, attributeType})
+			primaryRange = &KeySchemaElement{name, "RANGE"}
+		}
 	}
 
 	if primaryHash == nil {
