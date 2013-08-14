@@ -126,7 +126,10 @@ func (tt Tables) ToItem(s interface{}) Item {
 		name := typeOfItem.Field(i).Name
 		switch f.Type().Kind() {
 		case reflect.String:
-			it[name] = map[string]string{"S": f.Interface().(string)}
+			v := f.Interface().(string)
+			if v != "" {
+				it[name] = map[string]string{"S": v}
+			}
 		default:
 			panic("attribute type not supported")
 		}
