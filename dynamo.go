@@ -18,12 +18,12 @@ import (
 )
 
 type dynamo struct {
-	client    *aws4.Client
-	tableType map[string]reflect.Type
+	TableType
+	client *aws4.Client
 }
 
 func NewDynamoDB() DynamoDB {
-	return &dynamo{}
+	return &dynamo{TableType: make(TableType)}
 }
 
 func (b *dynamo) getClient() *aws4.Client {
@@ -93,20 +93,6 @@ RETRY:
 		}
 
 	}
-}
-
-func (db *dynamo) Register(tableName string, i interface{}) (*Table, error) {
-	tableType := reflect.TypeOf(i).Elem()
-	if db.tableType == nil {
-		db.tableType = make(map[string]reflect.Type)
-	}
-	db.tableType[tableName] = tableType
-
-	t, err := TableFor(tableName, tableType)
-	if err != nil {
-		return nil, err
-	}
-	return t, nil
 }
 
 func (db *dynamo) CreateTable(table *Table) error {
@@ -239,7 +225,7 @@ func (db *dynamo) GetItem(tableName string, s interface{}) (interface{}, error) 
 		reader.Close()
 	}
 
-	et := db.tableType[tableName]
+	et := db.TableType[tableName]
 	v := reflect.New(et)
 	v = v.Elem()
 	switch v.Kind() {
@@ -278,7 +264,7 @@ func (sr *dbScanResponse) GetItems() []interface{} {
 }
 
 func (db *dynamo) Scan(tableName string) (ScanResponse, error) {
-	et := db.tableType[tableName]
+	et := db.TableType[tableName]
 	reader, err := db.post("Scan", struct {
 		TableName string
 	}{tableName})

@@ -11,27 +11,12 @@ type table struct {
 }
 
 type memory struct {
+	TableType
 	tables map[string]*table
-	types  map[string]reflect.Type
 }
 
 func NewMemoryDB() DynamoDB {
-	return &memory{}
-}
-
-func (db *memory) Register(tableName string, i interface{}) (*Table, error) {
-	tableType := reflect.TypeOf(i).Elem()
-	if db.types == nil {
-		db.types = make(map[string]reflect.Type)
-	}
-	db.types[tableName] = tableType
-
-	t, err := TableFor(tableName, tableType)
-	if err != nil {
-		return nil, err
-	}
-
-	return t, nil
+	return &memory{TableType: make(TableType)}
 }
 
 func (b *memory) CreateTable(t *Table) error {

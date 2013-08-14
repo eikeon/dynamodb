@@ -53,7 +53,20 @@ type DynamoDB interface {
 	Scan(tableName string) (ScanResponse, error)
 }
 
-func TableFor(tableName string, tableType reflect.Type) (*Table, error) {
+type TableType map[string]reflect.Type
+
+func (tt TableType) Register(tableName string, i interface{}) (*Table, error) {
+	tableType := reflect.TypeOf(i).Elem()
+	tt[tableName] = tableType
+
+	t, err := tt.tableFor(tableName, tableType)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (tt TableType) tableFor(tableName string, tableType reflect.Type) (*Table, error) {
 	var primaryHash, primaryRange *KeySchemaElement
 	var attributeDefinitions []AttributeDefinition
 	var keySchema KeySchema
