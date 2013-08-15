@@ -3,6 +3,7 @@ package dynamodb
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 )
@@ -186,6 +187,14 @@ func (tt Tables) FromItem(tableName string, item Item) interface{} {
 			if value, ok := vv["S"]; ok {
 				f := v.FieldByName(kk)
 				f.SetString(value)
+			}
+			if value, ok := vv["N"]; ok {
+				f := v.FieldByName(kk)
+				n, err := strconv.ParseInt(value, 10, 64)
+				if err != nil || f.OverflowInt(n) {
+					panic(fmt.Sprintf("%v %v\n", value, v.Type()))
+				}
+				f.SetInt(n)
 			}
 		}
 	default:
