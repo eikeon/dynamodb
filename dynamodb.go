@@ -134,6 +134,12 @@ func (tt Tables) ToItem(s interface{}) Item {
 			if v != "" {
 				it[name] = map[string]string{"S": v}
 			}
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			s := strconv.FormatInt(f.Int(), 10)
+			it[name] = map[string]string{"N": s}
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+			s := strconv.FormatUint(f.Uint(), 10)
+			it[name] = map[string]string{"N": s}
 		default:
 			panic("attribute type not supported")
 		}
