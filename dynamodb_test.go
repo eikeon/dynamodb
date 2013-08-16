@@ -3,6 +3,7 @@ package dynamodb_test
 import (
 	"fmt"
 	"log"
+	"sync"
 	"testing"
 	"time"
 
@@ -106,4 +107,28 @@ func BenchmarkPutItem(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		benchmarkPutItem(b, i)
 	}
+}
+
+func BenchmarkPutItemConcurrent(b *testing.B) {
+	C := 10
+	items := make(chan int, C)
+	go func() {
+		for i := 0; i < b.N; i++ {
+			items <- i
+		}
+		close(items)
+	}()
+
+	var wg sync.WaitGroup
+	for i := 0; i < C; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range items {
+				benchmarkPutItem(b, item)
+			}
+		}()
+	}
+	wg.Wait()
+
 }
