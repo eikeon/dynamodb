@@ -21,12 +21,22 @@ type dynamo struct {
 }
 
 func NewDynamoDB() DynamoDB {
-	return &dynamo{Tables: make(Tables)}
+	d := &dynamo{Tables: make(Tables)}
+	if d.getClient() == nil {
+		log.Println("could not create dynamodb: no default aws4 client")
+		return nil
+	}
+	return d
 }
 
 func (b *dynamo) getClient() *aws4.Client {
 	if b.client == nil {
 		b.client = aws4.DefaultClient
+		if b.client != nil {
+			tr := &http.Transport{DisableKeepAlives: false, MaxIdleConnsPerHost: 100}
+			c := &http.Client{Transport: tr}
+			b.client.Client = c
+		}
 	}
 	return b.client
 }
