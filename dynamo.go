@@ -63,7 +63,7 @@ RETRY:
 				}
 				response.Body.Close()
 				if error.Type == "com.amazonaws.dynamodb.v20120810#ProvisionedThroughputExceededException" {
-					log.Println("Provisioned throughput exceeded... retrying.")
+					log.Println("Provisioned throughput exceeded... retrying:", action)
 				} else {
 					return nil, errors.New(fmt.Sprintf("%#v", error))
 				}
