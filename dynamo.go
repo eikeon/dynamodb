@@ -173,6 +173,19 @@ func (db *dynamo) PutItem(tableName string, item Item) error {
 	return err
 }
 
+func (db *dynamo) DeleteItem(deleteItem DeleteItem) (*DeleteItemResponse, error) {
+	if reader, err := db.post("DeleteItem", deleteItem); err == nil {
+		response := &DeleteItemResponse{}
+		if err = json.NewDecoder(reader).Decode(&response); err != nil {
+			return nil, err
+		}
+		reader.Close()
+		return response, nil
+	} else {
+		return nil, err
+	}
+}
+
 func (db *dynamo) GetItem(tableName string, key Key) (*GetItemResponse, error) {
 	reader, err := db.post("GetItem", struct {
 		TableName string

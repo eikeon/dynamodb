@@ -45,6 +45,15 @@ type GetItemResponse struct {
 	Item Item
 }
 
+type DeleteItem struct {
+	TableName string
+	Key       Key
+}
+
+type DeleteItemResponse struct {
+	Attributes map[string]AttributeValue
+}
+
 type ScanResponse struct {
 	Count        int
 	ScannedCount int
@@ -62,6 +71,7 @@ type DynamoDB interface {
 	DescribeTable(tableName string) (*TableDescription, error)
 	DeleteTable(tableName string) error
 	PutItem(tableName string, item Item) error
+	DeleteItem(deleteItem DeleteItem) (*DeleteItemResponse, error)
 	GetItem(tableName string, key Key) (*GetItemResponse, error)
 	Scan(tableName string) (*ScanResponse, error)
 	Query(query *Query) (*QueryResponse, error)

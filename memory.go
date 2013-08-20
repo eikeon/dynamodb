@@ -60,6 +60,10 @@ func (b *memory) PutItem(tableName string, item Item) error {
 	return nil
 }
 
+func (b *memory) DeleteItem(deleteItem DeleteItem) (*DeleteItemResponse, error) {
+	return nil, errors.New("NYI")
+}
+
 func (b *memory) GetItem(tableName string, key Key) (*GetItemResponse, error) {
 	if b.tables == nil {
 		return nil, errors.New("no tables")
