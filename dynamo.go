@@ -209,3 +209,18 @@ func (db *dynamo) Scan(tableName string) (*ScanResponse, error) {
 	}
 	return response, nil
 }
+
+func (db *dynamo) Query(query *Query) (*QueryResponse, error) {
+	reader, err := db.post("Query", query)
+	if err != nil {
+		return nil, err
+	}
+	response := &QueryResponse{}
+	if err = json.NewDecoder(reader).Decode(&response); err != nil {
+		return nil, err
+	}
+	if reader != nil {
+		reader.Close()
+	}
+	return response, nil
+}

@@ -64,6 +64,7 @@ type DynamoDB interface {
 	PutItem(tableName string, item Item) error
 	GetItem(tableName string, key Key) (*GetItemResponse, error)
 	Scan(tableName string) (*ScanResponse, error)
+	Query(query *Query) (*QueryResponse, error)
 }
 
 type Tables map[string]*Table
@@ -151,6 +152,23 @@ func (tt Tables) ToItem(s interface{}) Item {
 
 type AttributeValue map[string]string
 type Key map[string]AttributeValue
+
+type Condition struct {
+	AttributeValueList []AttributeValue
+	ComparisonOperator string
+}
+
+type KeyConditions map[string]Condition
+
+type Query struct {
+	TableName     string
+	KeyConditions KeyConditions
+}
+
+type QueryResponse struct {
+	Count int
+	Items []Item
+}
 
 func (tt Tables) ToKey(s interface{}) Key {
 

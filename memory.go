@@ -97,3 +97,7 @@ func (b *memory) Scan(tableName string) (scanResponse *ScanResponse, err error) 
 	}
 	return &ScanResponse{Count: len(t), ScannedCount: len(t), Items: items}, nil
 }
+
+func (m *memory) Query(query *Query) (*QueryResponse, error) {
+	return nil, errors.New("NYI")
+}
