@@ -49,7 +49,7 @@ func testCreateTable(t *testing.T) {
 	}
 	table.ProvisionedThroughput.ReadCapacityUnits = 100
 	table.ProvisionedThroughput.WriteCapacityUnits = 100
-	if err := DB.CreateTable(table); err != nil {
+	if _, err := DB.CreateTable(table.TableName, table.AttributeDefinitions, table.KeySchema, table.ProvisionedThroughput, nil); err != nil {
 		log.Println(err)
 		//t.Error(err)
 	}
@@ -57,7 +57,7 @@ func testCreateTable(t *testing.T) {
 
 func testDescribeTable(t *testing.T) {
 	for {
-		if description, err := DB.DescribeTable(fetchrequestTableName); err != nil {
+		if description, err := DB.DescribeTable(fetchrequestTableName, nil); err != nil {
 			t.Error(err)
 		} else {
 			log.Println(description.Table.TableStatus)
@@ -72,7 +72,7 @@ func testDescribeTable(t *testing.T) {
 func putItem(j int) error {
 	url := fmt.Sprintf("http://localhost-%d/%d", j, j)
 	if f, err := NewFetchRequest(url); err == nil {
-		if err := DB.PutItem(fetchrequestTableName, DB.ToItem(f)); err != nil {
+		if _, err := DB.PutItem(fetchrequestTableName, DB.ToItem(f), nil); err != nil {
 			return err
 		}
 	} else {
@@ -84,9 +84,11 @@ func putItem(j int) error {
 func testGetItem(t *testing.T, j int) {
 	url := fmt.Sprintf("http://localhost-%d/%d", j, j)
 	if fr, err := NewFetchRequest(url); err == nil {
-		if f, err := DB.GetItem(fetchrequestTableName, DB.ToKey(fr)); err != nil {
+		log.Println("key:", DB.ToKey(fr))
+		if f, err := DB.GetItem(fetchrequestTableName, DB.ToKey(fr), nil); err != nil {
 			t.Error(err)
 		} else {
+			log.Println("f:", f)
 			log.Println("Got:", DB.FromItem(fetchrequestTableName, f.Item))
 		}
 	} else {
@@ -95,20 +97,20 @@ func testGetItem(t *testing.T, j int) {
 }
 
 func testScan(t *testing.T) {
-	if response, err := DB.Scan(fetchrequestTableName); err != nil {
+	if response, err := DB.Scan(fetchrequestTableName, nil); err != nil {
 		t.Error(err)
 	} else {
 		for i := 0; i < response.Count; i++ {
 			item := DB.FromItem(fetchrequestTableName, response.Items[i])
-			if false { // TODO: vervose
-				log.Println("item:", item)
-			}
+			//if false { // TODO: vervose
+			log.Println("item:", item)
+			//}
 		}
 	}
 }
 
 func testDeleteTable(t *testing.T) {
-	if err := DB.DeleteTable(fetchrequestTableName); err != nil {
+	if _, err := DB.DeleteTable(fetchrequestTableName, nil); err != nil {
 		t.Error(err)
 	}
 

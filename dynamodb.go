@@ -1,4 +1,4 @@
-// dynamodo...
+// DynamoDB API Version 2012-08-10
 package dynamodb
 
 import (
@@ -8,93 +8,219 @@ import (
 	"strconv"
 )
 
-type KeySchema []KeySchemaElement
+type AttributeDefinition struct {
+	AttributeName string
+	AttributeType string
+}
+
+type AttributeValue map[string]string
+
+//AttributeValueUpdate
+
+// +
+type BatchGetItemOptions struct {
+}
+
+type BatchGetItemResult struct {
+}
+
+// +
+type BatchWriteItemOptions struct {
+}
+
+type BatchWriteItemResult struct {
+}
+
+type Condition struct {
+	AttributeValueList []AttributeValue
+	ComparisonOperator string
+}
+
+//ConsumedCapacity
+
+// +
+type CreateTableOptions struct {
+}
+
+type CreateTableResult struct {
+	TableDescription *TableDescription
+}
+
+// +
+type DeleteItemOptions struct {
+}
+
+type DeleteItemResult struct {
+	Attributes map[string]AttributeValue
+}
+
+// +
+type DeleteTableOptions struct {
+}
+
+//DeleteRequest
+
+type DeleteTableResult struct {
+	TableDescription *TableDescription
+}
+
+// +
+type DescribeTableOptions struct {
+}
+
+type DescribeTableResult struct {
+	Table *TableDescription
+}
+
+//ExpectedAttributeValue
+
+// +
+type GetItemOptions struct {
+}
+
+type GetItemResult struct {
+	Item Item
+}
+
+// +
+type Item map[string]AttributeValue
+
+//ItemCollectionMetrics
+
+// +
+type Key map[string]AttributeValue
+
+// +
+type KeyConditions map[string]Condition
 
 type KeySchemaElement struct {
 	AttributeName string
 	KeyType       string
 }
 
-type AttributeDefinition struct {
-	AttributeName string
-	AttributeType string
+type KeysAndAttributes struct {
 }
+
+// +
+type ListTablesOptions struct {
+}
+
+type ListTablesResult struct {
+}
+
+//LocalSecondaryIndex
+//LocalSecondaryIndexDescription
+//Projection
 
 type ProvisionedThroughput struct {
 	ReadCapacityUnits  int
 	WriteCapacityUnits int
 }
 
-type Table struct {
-	TableName             string
-	KeySchema             KeySchema
-	AttributeDefinitions  []AttributeDefinition
-	ProvisionedThroughput ProvisionedThroughput
-	tableType             reflect.Type
+//ProvisionedThroughputDescription
+
+// +
+type PutItemOptions struct {
 }
 
-type TableDescription struct {
-	Table struct {
-		TableStatus string
-	}
+type PutItemResult struct {
 }
 
-type Item map[string]map[string]string
+//PutRequest
 
-type GetItemResponse struct {
-	Item Item
+// +
+type QueryOptions struct {
+	KeyConditions KeyConditions
 }
 
-type DeleteItem struct {
-	TableName string
-	Key       Key
+type QueryResult struct {
+	Count int
+	Items []Item
 }
 
-type DeleteItemResponse struct {
-	Attributes map[string]AttributeValue
+// +
+type ScanOptions struct {
 }
 
-type ScanResponse struct {
+type ScanResult struct {
 	Count        int
 	ScannedCount int
 	Items        []Item
 }
 
+type TableDescription struct {
+	TableName             string
+	KeySchema             []KeySchemaElement
+	AttributeDefinitions  []AttributeDefinition
+	ProvisionedThroughput ProvisionedThroughput
+	TableStatus           string
+}
+
+// +
+type UpdateItemOptions struct {
+}
+
+type UpdateItemResult struct {
+}
+
+// +
+type UpdateTableOptions struct {
+}
+
+type UpdateTableResult struct {
+}
+
+type WriteRequest struct {
+}
+
+type actions interface {
+	BatchGetItem(requestedItems map[string]KeysAndAttributes, options *BatchGetItemOptions) (*BatchGetItemResult, error)
+	BatchWriteItem(requestedItems map[string]WriteRequest, options *BatchWriteItemOptions) (*BatchWriteItemResult, error)
+	CreateTable(tableName string, attributeDefinitions []AttributeDefinition, keySchema []KeySchemaElement, ProvisionedThroughput ProvisionedThroughput, options *CreateTableOptions) (*CreateTableResult, error)
+	DeleteItem(tableName string, key Key, options *DeleteItemOptions) (*DeleteItemResult, error)
+	DeleteTable(tableName string, options *DeleteTableOptions) (*DeleteTableResult, error)
+	DescribeTable(tableName string, options *DescribeTableOptions) (*DescribeTableResult, error)
+	GetItem(tableName string, key Key, options *GetItemOptions) (*GetItemResult, error)
+	ListTables(options *ListTablesOptions) (*ListTablesResult, error)
+	PutItem(tableName string, item Item, options *PutItemOptions) (*PutItemResult, error)
+	Query(tableName string, options *QueryOptions) (*QueryResult, error)
+	Scan(tableName string, options *ScanOptions) (*ScanResult, error)
+	UpdateItem(tableName string, key Key, options *UpdateItemOptions) (*UpdateItemResult, error)
+	UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput, options *UpdateTableOptions) (*UpdateTableResult, error)
+}
+
 type DynamoDB interface {
-	Register(tableName string, i interface{}) (*Table, error)
+	actions
+
+	Register(tableName string, i interface{}) (*TableDescription, error)
 	ToItem(s interface{}) Item
 	ToKey(s interface{}) Key
 	FromItem(string, Item) interface{}
-
-	CreateTable(table *Table) error
-	UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput) error
-	DescribeTable(tableName string) (*TableDescription, error)
-	DeleteTable(tableName string) error
-	PutItem(tableName string, item Item) error
-	DeleteItem(deleteItem DeleteItem) (*DeleteItemResponse, error)
-	GetItem(tableName string, key Key) (*GetItemResponse, error)
-	Scan(tableName string) (*ScanResponse, error)
-	Query(query *Query) (*QueryResponse, error)
 }
 
-type Tables map[string]*Table
+type Tables map[string]struct {
+	TableDescription *TableDescription
+	TableType        reflect.Type
+}
 
-func (tt Tables) Register(tableName string, i interface{}) (*Table, error) {
+func (tt Tables) Register(tableName string, i interface{}) (*TableDescription, error) {
 	tableType := reflect.TypeOf(i).Elem()
-
-	t, err := tt.tableFor(tableName, tableType)
-	if err != nil {
+	if t, err := tt.tableFor(tableName, tableType); err == nil {
+		tt[tableName] = struct {
+			TableDescription *TableDescription
+			TableType        reflect.Type
+		}{TableDescription: t, TableType: tableType}
+		return t, nil
+	} else {
 		return nil, err
 	}
 
-	tt[tableName] = t
-	return t, nil
 }
 
-func (tt Tables) tableFor(tableName string, tableType reflect.Type) (*Table, error) {
+func (tt Tables) tableFor(tableName string, tableType reflect.Type) (*TableDescription, error) {
 	var primaryHash, primaryRange *KeySchemaElement
 	var attributeDefinitions []AttributeDefinition
-	var keySchema KeySchema
+	var keySchema []KeySchemaElement
 	provisionedThroughput := ProvisionedThroughput{1, 1}
 
 	for i := 0; i < tableType.NumField(); i++ {
@@ -129,11 +255,11 @@ func (tt Tables) tableFor(tableName string, tableType reflect.Type) (*Table, err
 	if primaryRange != nil {
 		keySchema = append(keySchema, *primaryRange)
 	}
-	return &Table{tableName, keySchema, attributeDefinitions, provisionedThroughput, tableType}, nil
+	return &TableDescription{TableName: tableName, KeySchema: keySchema, AttributeDefinitions: attributeDefinitions, ProvisionedThroughput: provisionedThroughput}, nil
 }
 
 func (tt Tables) ToItem(s interface{}) Item {
-	var it Item = make(map[string]map[string]string)
+	var it Item = make(map[string]AttributeValue)
 	sValue := reflect.ValueOf(s).Elem()
 	typeOfItem := sValue.Type()
 
@@ -158,26 +284,6 @@ func (tt Tables) ToItem(s interface{}) Item {
 
 	}
 	return it
-}
-
-type AttributeValue map[string]string
-type Key map[string]AttributeValue
-
-type Condition struct {
-	AttributeValueList []AttributeValue
-	ComparisonOperator string
-}
-
-type KeyConditions map[string]Condition
-
-type Query struct {
-	TableName     string
-	KeyConditions KeyConditions
-}
-
-type QueryResponse struct {
-	Count int
-	Items []Item
 }
 
 func (tt Tables) ToKey(s interface{}) Key {
@@ -206,7 +312,7 @@ func (tt Tables) ToKey(s interface{}) Key {
 }
 
 func (tt Tables) FromItem(tableName string, item Item) interface{} {
-	et := tt[tableName].tableType
+	et := tt[tableName].TableType
 	v := reflect.New(et)
 	v = v.Elem()
 	switch v.Kind() {

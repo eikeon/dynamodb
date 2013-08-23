@@ -15,39 +15,56 @@ func NewMemoryDB() DynamoDB {
 	return &memory{Tables: make(Tables)}
 }
 
-func (b *memory) CreateTable(t *Table) error {
+func (b *memory) BatchGetItem(requestedItems map[string]KeysAndAttributes, options *BatchGetItemOptions) (*BatchGetItemResult, error) {
+	return nil, errors.New("NYI")
+}
+
+func (b *memory) BatchWriteItem(requestedItems map[string]WriteRequest, options *BatchWriteItemOptions) (*BatchWriteItemResult, error) {
+	return nil, errors.New("NYI")
+}
+
+func (b *memory) CreateTable(tableName string, attributeDefinitions []AttributeDefinition, keySchema []KeySchemaElement, ProvisionedThroughput ProvisionedThroughput, options *CreateTableOptions) (*CreateTableResult, error) {
 	if b.tables == nil {
 		b.tables = make(map[string]items)
 	}
-	b.tables[t.TableName] = make(items)
-	return nil
-}
-
-func (db *memory) UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput) error {
-	return nil
-}
-
-func (db *memory) DescribeTable(tableName string) (*TableDescription, error) {
+	b.tables[tableName] = make(items)
 	td := TableDescription{}
-	td.Table.TableStatus = "ACTIVE"
-	return &td, nil
+	td.TableStatus = "ACTIVE"
+	return &CreateTableResult{TableDescription: &td}, nil
 }
 
-func (db *memory) DeleteTable(tableName string) error {
+func (m *memory) UpdateItem(tableName string, key Key, options *UpdateItemOptions) (*UpdateItemResult, error) {
+	return nil, errors.New("NYI")
+}
+
+func (db *memory) UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput, options *UpdateTableOptions) (*UpdateTableResult, error) {
+	return nil, errors.New("NYI")
+}
+
+func (db *memory) DescribeTable(tableName string, options *DescribeTableOptions) (*DescribeTableResult, error) {
+
+	td := TableDescription{}
+	td.TableStatus = "ACTIVE"
+	return &DescribeTableResult{Table: &td}, nil
+}
+
+func (db *memory) DeleteTable(tableName string, options *DeleteTableOptions) (*DeleteTableResult, error) {
 	delete(db.tables, tableName)
-	return nil
+	td := TableDescription{}
+	// TODO
+	return &DeleteTableResult{TableDescription: &td}, nil
 }
 
-func (b *memory) PutItem(tableName string, item Item) error {
+func (b *memory) PutItem(tableName string, item Item, options *PutItemOptions) (*PutItemResult, error) {
 	if b.tables == nil {
-		return errors.New("no tables")
+		return nil, errors.New("no tables")
 	}
 	t, ok := b.tables[tableName]
 	if !ok {
-		return errors.New("no such table")
+		return nil, errors.New("no such table")
 	}
 	pk := ""
-	hash := b.Tables[tableName].KeySchema[0]
+	hash := b.Tables[tableName].TableDescription.KeySchema[0]
 	m := item[hash.AttributeName]
 	if len(m) == 1 {
 		for _, v := range m {
@@ -57,14 +74,15 @@ func (b *memory) PutItem(tableName string, item Item) error {
 		panic("boo")
 	}
 	t[pk] = item
-	return nil
+	r := PutItemResult{} // TODO
+	return &r, nil
 }
 
-func (b *memory) DeleteItem(deleteItem DeleteItem) (*DeleteItemResponse, error) {
+func (b *memory) DeleteItem(tableName string, key Key, options *DeleteItemOptions) (*DeleteItemResult, error) {
 	return nil, errors.New("NYI")
 }
 
-func (b *memory) GetItem(tableName string, key Key) (*GetItemResponse, error) {
+func (b *memory) GetItem(tableName string, key Key, options *GetItemOptions) (*GetItemResult, error) {
 	if b.tables == nil {
 		return nil, errors.New("no tables")
 	}
@@ -74,7 +92,7 @@ func (b *memory) GetItem(tableName string, key Key) (*GetItemResponse, error) {
 	}
 
 	pk := ""
-	hash := b.Tables[tableName].KeySchema[0]
+	hash := b.Tables[tableName].TableDescription.KeySchema[0]
 	m := key[hash.AttributeName]
 	if len(m) == 1 {
 		for _, v := range m {
@@ -83,11 +101,14 @@ func (b *memory) GetItem(tableName string, key Key) (*GetItemResponse, error) {
 	} else {
 		panic("boo")
 	}
-
-	return &GetItemResponse{t[pk]}, nil
+	return &GetItemResult{t[pk]}, nil
 }
 
-func (b *memory) Scan(tableName string) (scanResponse *ScanResponse, err error) {
+func (b *memory) ListTables(options *ListTablesOptions) (*ListTablesResult, error) {
+	return nil, errors.New("NYI")
+}
+
+func (b *memory) Scan(tableName string, options *ScanOptions) (scanResult *ScanResult, err error) {
 	if b.tables == nil {
 		return nil, errors.New("no tables")
 	}
@@ -99,9 +120,9 @@ func (b *memory) Scan(tableName string) (scanResponse *ScanResponse, err error) 
 	for _, item := range t {
 		items = append(items, item)
 	}
-	return &ScanResponse{Count: len(t), ScannedCount: len(t), Items: items}, nil
+	return &ScanResult{Count: len(t), ScannedCount: len(t), Items: items}, nil
 }
 
-func (m *memory) Query(query *Query) (*QueryResponse, error) {
+func (m *memory) Query(tableName string, options *QueryOptions) (*QueryResult, error) {
 	return nil, errors.New("NYI")
 }
