@@ -47,9 +47,8 @@ func testCreateTable(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	table.ProvisionedThroughput.ReadCapacityUnits = 100
-	table.ProvisionedThroughput.WriteCapacityUnits = 100
-	if _, err := DB.CreateTable(table.TableName, table.AttributeDefinitions, table.KeySchema, table.ProvisionedThroughput, nil); err != nil {
+	pt := dynamodb.ProvisionedThroughput{ReadCapacityUnits: 100, WriteCapacityUnits: 100}
+	if _, err := DB.CreateTable(table.TableName, table.AttributeDefinitions, table.KeySchema, pt, nil); err != nil {
 		log.Println(err)
 		//t.Error(err)
 	}
@@ -89,7 +88,11 @@ func testGetItem(t *testing.T, j int) {
 			t.Error(err)
 		} else {
 			log.Println("f:", f)
-			log.Println("Got:", DB.FromItem(fetchrequestTableName, f.Item))
+			if f.Item != nil {
+				log.Println("Got:", DB.FromItem(fetchrequestTableName, *f.Item))
+			} else {
+				log.Println("Didn't find item")
+			}
 		}
 	} else {
 		t.Error(err)
@@ -97,9 +100,13 @@ func testGetItem(t *testing.T, j int) {
 }
 
 func testScan(t *testing.T) {
-	if response, err := DB.Scan(fetchrequestTableName, nil); err != nil {
+	var options dynamodb.ScanOptions
+	//options = dynamodb.ScanOptions{Limit: 2, ReturnConsumedCapacity: "TOTAL"}
+	//options = dynamodb.ScanOptions{Limit: 1}
+	if response, err := DB.Scan(fetchrequestTableName, &options); err != nil {
 		t.Error(err)
 	} else {
+		log.Printf("scan response: %#v\n", response)
 		for i := 0; i < response.Count; i++ {
 			item := DB.FromItem(fetchrequestTableName, response.Items[i])
 			//if false { // TODO: vervose

@@ -7,12 +7,12 @@ import (
 type items map[string]Item
 
 type memory struct {
-	Tables
+	mapping
 	tables map[string]items
 }
 
 func NewMemoryDB() DynamoDB {
-	return &memory{Tables: make(Tables)}
+	return &memory{mapping: make(mapping)}
 }
 
 func (b *memory) BatchGetItem(requestedItems map[string]KeysAndAttributes, options *BatchGetItemOptions) (*BatchGetItemResult, error) {
@@ -64,7 +64,7 @@ func (b *memory) PutItem(tableName string, item Item, options *PutItemOptions) (
 		return nil, errors.New("no such table")
 	}
 	pk := ""
-	hash := b.Tables[tableName].TableDescription.KeySchema[0]
+	hash := b.mapping[tableName].TableDescription.KeySchema[0]
 	m := item[hash.AttributeName]
 	if len(m) == 1 {
 		for _, v := range m {
@@ -92,7 +92,7 @@ func (b *memory) GetItem(tableName string, key Key, options *GetItemOptions) (*G
 	}
 
 	pk := ""
-	hash := b.Tables[tableName].TableDescription.KeySchema[0]
+	hash := b.mapping[tableName].TableDescription.KeySchema[0]
 	m := key[hash.AttributeName]
 	if len(m) == 1 {
 		for _, v := range m {
@@ -101,7 +101,8 @@ func (b *memory) GetItem(tableName string, key Key, options *GetItemOptions) (*G
 	} else {
 		panic("boo")
 	}
-	return &GetItemResult{t[pk]}, nil
+	i := t[pk]
+	return &GetItemResult{Item: &i}, nil
 }
 
 func (b *memory) ListTables(options *ListTablesOptions) (*ListTablesResult, error) {

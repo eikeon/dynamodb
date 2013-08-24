@@ -16,12 +16,12 @@ import (
 )
 
 type dynamo struct {
-	Tables
+	mapping
 	client *aws4.Client
 }
 
 func NewDynamoDB() DynamoDB {
-	d := &dynamo{Tables: make(Tables)}
+	d := &dynamo{mapping: make(mapping)}
 	if d.getClient() == nil {
 		log.Println("could not create dynamodb: no default aws4 client")
 		return nil
@@ -117,7 +117,8 @@ func (db *dynamo) CreateTable(tableName string, attributeDefinitions []Attribute
 		AttributeDefinitions  []AttributeDefinition
 		KeySchema             []KeySchemaElement
 		ProvisionedThroughput ProvisionedThroughput
-	}{TableName: tableName, AttributeDefinitions: attributeDefinitions, KeySchema: keySchema, ProvisionedThroughput: provisionedThroughput}
+		*CreateTableOptions
+	}{TableName: tableName, AttributeDefinitions: attributeDefinitions, KeySchema: keySchema, ProvisionedThroughput: provisionedThroughput, CreateTableOptions: options}
 	reader, err := db.post("CreateTable", table)
 	if err != nil {
 		return nil, err
@@ -140,7 +141,8 @@ func (db *dynamo) UpdateTable(tableName string, provisionedThroughput Provisione
 	if reader, err := db.post("UpdateTable", struct {
 		TableName             string
 		ProvisionedThroughput ProvisionedThroughput
-	}{tableName, provisionedThroughput}); err == nil {
+		*UpdateTableOptions
+	}{tableName, provisionedThroughput, options}); err == nil {
 		response := &UpdateTableResult{}
 		if err = json.NewDecoder(reader).Decode(&response); err != nil {
 			return nil, err
@@ -155,7 +157,8 @@ func (db *dynamo) UpdateTable(tableName string, provisionedThroughput Provisione
 func (db *dynamo) DescribeTable(tableName string, options *DescribeTableOptions) (*DescribeTableResult, error) {
 	reader, err := db.post("DescribeTable", struct {
 		TableName string
-	}{tableName})
+		*DescribeTableOptions
+	}{tableName, options})
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +175,8 @@ func (db *dynamo) DescribeTable(tableName string, options *DescribeTableOptions)
 func (db *dynamo) DeleteTable(tableName string, options *DeleteTableOptions) (*DeleteTableResult, error) {
 	if reader, err := db.post("DeleteTable", struct {
 		TableName string
-	}{tableName}); err == nil {
+		*DeleteTableOptions
+	}{tableName, options}); err == nil {
 		response := &DeleteTableResult{}
 		if err = json.NewDecoder(reader).Decode(&response); err != nil {
 			return nil, err
@@ -188,7 +192,8 @@ func (db *dynamo) PutItem(tableName string, item Item, options *PutItemOptions) 
 	if reader, err := db.post("PutItem", struct {
 		TableName string
 		Item      Item
-	}{tableName, item}); err == nil {
+		*PutItemOptions
+	}{tableName, item, options}); err == nil {
 		response := &PutItemResult{}
 		if err = json.NewDecoder(reader).Decode(&response); err != nil {
 			return nil, err
@@ -204,7 +209,8 @@ func (db *dynamo) DeleteItem(tableName string, key Key, options *DeleteItemOptio
 	if reader, err := db.post("DeleteItem", struct {
 		TableName string
 		Key       Key
-	}{TableName: tableName, Key: key}); err == nil {
+		*DeleteItemOptions
+	}{TableName: tableName, Key: key, DeleteItemOptions: options}); err == nil {
 		response := &DeleteItemResult{}
 		if err = json.NewDecoder(reader).Decode(&response); err != nil {
 			return nil, err
@@ -220,7 +226,8 @@ func (db *dynamo) GetItem(tableName string, key Key, options *GetItemOptions) (*
 	reader, err := db.post("GetItem", struct {
 		TableName string
 		Key       Key
-	}{tableName, key})
+		*GetItemOptions
+	}{tableName, key, options})
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +250,8 @@ func (db *dynamo) ListTables(options *ListTablesOptions) (*ListTablesResult, err
 func (db *dynamo) Scan(tableName string, options *ScanOptions) (*ScanResult, error) {
 	reader, err := db.post("Scan", struct {
 		TableName string
-	}{tableName})
+		*ScanOptions
+	}{tableName, options})
 	if err != nil {
 		return nil, err
 	}

@@ -1,12 +1,8 @@
-// DynamoDB API Version 2012-08-10
+// A complete client side implementation of the DynamoDB API Version 2012-08-10 along with methods for mapping between items and go values (structs).
 package dynamodb
 
-import (
-	"errors"
-	"fmt"
-	"reflect"
-	"strconv"
-)
+// Represents the date and time when the table was created, in UNIX epoch time format.
+type DateTime float64
 
 type AttributeDefinition struct {
 	AttributeName string
@@ -15,20 +11,30 @@ type AttributeDefinition struct {
 
 type AttributeValue map[string]string
 
-//AttributeValueUpdate
+type AttributeValueUpdate struct {
+	Action string         `json:",omitempty"`
+	Value  AttributeValue `json:",omitempty"`
+}
 
-// +
 type BatchGetItemOptions struct {
+	ReturnConsumedCapacity string `json:",omitempty"`
 }
 
 type BatchGetItemResult struct {
+	ConsumedCapacity *ConsumedCapacity
+	Responses        map[string][]Item
+	UnprocessedKeys  map[string]KeysAndAttributes
 }
 
-// +
 type BatchWriteItemOptions struct {
+	ReturnConsumedCapacity      string `json:",omitempty"`
+	ReturnItemCollectionMetrics string `json:",omitempty"`
 }
 
 type BatchWriteItemResult struct {
+	ConsumedCapacity      *ConsumedCapacity
+	ItemCollectionMetrics *ItemCollectionMetrics
+	UnprocessedKeys       map[string]WriteRequest
 }
 
 type Condition struct {
@@ -36,35 +42,45 @@ type Condition struct {
 	ComparisonOperator string
 }
 
-//ConsumedCapacity
+type ConsumedCapacity struct {
+	CapacityUnits float64
+	TableName     string
+}
 
-// +
 type CreateTableOptions struct {
+	LocalSecondaryIndexes []LocalSecondaryIndex `json:",omitempty"`
 }
 
 type CreateTableResult struct {
 	TableDescription *TableDescription
 }
 
-// +
 type DeleteItemOptions struct {
+	Expected                    map[string]ExpectedAttributeValue `json:",omitempty"`
+	ReturnConsumedCapacity      string                            `json:",omitempty"`
+	ReturnItemCollectionMetrics string                            `json:",omitempty"`
+	ReturnValues                string                            `json:",omitempty"`
 }
 
 type DeleteItemResult struct {
-	Attributes map[string]AttributeValue
+	Attributes            map[string]AttributeValue
+	ConsumedCapacity      *ConsumedCapacity
+	ItemCollectionMetrics *ItemCollectionMetrics
 }
 
-// +
+// There are no options for the DeleteTable action in the API Version 2012-08-10.
 type DeleteTableOptions struct {
 }
 
-//DeleteRequest
+type DeleteRequest struct {
+	Key Key
+}
 
 type DeleteTableResult struct {
 	TableDescription *TableDescription
 }
 
-// +
+// There are no options for the DescribeTable action in the API Version 2012-08-10.
 type DescribeTableOptions struct {
 }
 
@@ -72,20 +88,29 @@ type DescribeTableResult struct {
 	Table *TableDescription
 }
 
-//ExpectedAttributeValue
+type ExpectedAttributeValue struct {
+	Exists *bool          `json:",omitempty"`
+	Value  AttributeValue `json:",omitempty"`
+}
 
-// +
 type GetItemOptions struct {
+	AttributesToGet        *[]string `json:",omitempty"`
+	ConsistentRead         *bool     `json:",omitempty"`
+	ReturnConsumedCapacity string    `json:",omitempty"`
 }
 
 type GetItemResult struct {
-	Item Item
+	ConsumedCapacity *ConsumedCapacity
+	Item             *Item
 }
 
 // +
 type Item map[string]AttributeValue
 
-//ItemCollectionMetrics
+type ItemCollectionMetrics struct {
+	ItemCollectionKey   Key
+	SizeEstimateRangeGB *[]float64
+}
 
 // +
 type Key map[string]AttributeValue
@@ -101,79 +126,145 @@ type KeySchemaElement struct {
 type KeysAndAttributes struct {
 }
 
-// +
 type ListTablesOptions struct {
+	ExclusiveStartTableName string `json:",omitempty"`
+	Limit                   int    `json:",omitempty"`
 }
 
 type ListTablesResult struct {
+	LastEvaluatedTableName string
+	TableNames             []string
 }
 
-//LocalSecondaryIndex
-//LocalSecondaryIndexDescription
-//Projection
+type LocalSecondaryIndex struct {
+	IndexName  string
+	KeySchema  []KeySchemaElement
+	Projection Projection
+}
+
+type LocalSecondaryIndexDescription struct {
+	IndexName      string
+	IndexSizeBytes int64
+	ItemCount      int64
+	KeySchema      []KeySchemaElement
+	Projection     *Projection
+}
+
+type Projection struct {
+	NonKeyAttributes []string `json:",omitempty"`
+	ProjectionType   string   `json:",omitempty"`
+}
 
 type ProvisionedThroughput struct {
 	ReadCapacityUnits  int
 	WriteCapacityUnits int
 }
 
-//ProvisionedThroughputDescription
+type ProvisionedThroughputDescription struct {
+	LastDecreaseDateTime   DateTime
+	LastIncreaseDateTime   DateTime
+	NumberOfDecreasesToday int
+	ReadCapacityUnits      int
+	WriteCapacityUnits     int
+}
 
-// +
 type PutItemOptions struct {
+	Expected                    map[string]ExpectedAttributeValue `json:",omitempty"`
+	ReturnConsumedCapacity      string                            `json:",omitempty"`
+	ReturnItemCollectionMetrics string                            `json:",omitempty"`
+	ReturnValues                string                            `json:",omitempty"`
 }
 
 type PutItemResult struct {
+	Attributes            map[string]AttributeValue
+	ConsumedCapacity      *ConsumedCapacity
+	ItemCollectionMetrics *ItemCollectionMetrics
 }
 
-//PutRequest
+type PutRequest struct {
+	Item Item
+}
 
-// +
 type QueryOptions struct {
-	KeyConditions KeyConditions
+	AttributesToGet        []string      `json:",omitempty"`
+	ConsistentRead         bool          `json:",omitempty"`
+	ExclusiveStartKey      Key           `json:",omitempty"`
+	IndexName              string        `json:",omitempty"`
+	KeyConditions          KeyConditions `json:",omitempty"`
+	Limit                  int           `json:",omitempty"`
+	ReturnConsumedCapacity string        `json:",omitempty"`
+	ScanIndexForward       *bool         `json:",omitempty"` // defaults to true
+	Select                 string        `json:",omitempty"`
 }
 
 type QueryResult struct {
-	Count int
-	Items []Item
+	ConsumedCapacity *ConsumedCapacity
+	Count            int
+	Items            []Item
+	LastEvaluatedKey Key
 }
 
-// +
 type ScanOptions struct {
+	AttributesToGet        []string      `json:",omitempty"`
+	ExclusiveStartKey      Key           `json:",omitempty"`
+	Limit                  int           `json:",omitempty"`
+	ReturnConsumedCapacity string        `json:",omitempty"`
+	ScanFilter             KeyConditions `json:",omitempty"`
+	Segment                int           `json:",omitempty"`
+	Select                 string        `json:",omitempty"`
+	TotalSegments          int           `json:",omitempty"`
 }
 
 type ScanResult struct {
-	Count        int
-	ScannedCount int
-	Items        []Item
+	ConsumedCapacity *ConsumedCapacity
+	Count            int
+	Items            []Item
+	LastEvaluatedKey Key
+	ScannedCount     int
 }
 
 type TableDescription struct {
-	TableName             string
-	KeySchema             []KeySchemaElement
 	AttributeDefinitions  []AttributeDefinition
-	ProvisionedThroughput ProvisionedThroughput
+	CreationDateTime      DateTime
+	ItemCount             int64
+	KeySchema             []KeySchemaElement
+	LocalSecondaryIndexes []LocalSecondaryIndexDescription
+	ProvisionedThroughput *ProvisionedThroughputDescription
+	TableName             string
+	TableSizeBytes        int64
 	TableStatus           string
 }
 
-// +
 type UpdateItemOptions struct {
+	AttributeUpdates            map[string]AttributeValueUpdate   `json:",omitempty"`
+	Expected                    map[string]ExpectedAttributeValue `json:",omitempty"`
+	ReturnConsumedCapacity      string                            `json:",omitempty"`
+	ReturnItemCollectionMetrics string                            `json:",omitempty"`
+	ReturnValues                string                            `json:",omitempty"`
 }
 
 type UpdateItemResult struct {
+	Attributes            map[string]AttributeValue
+	ConsumedCapacity      *ConsumedCapacity
+	ItemCollectionMetrics *ItemCollectionMetrics
 }
 
-// +
+// There are no options for the UpdateTable action in the API Version 2012-08-10.
 type UpdateTableOptions struct {
 }
 
 type UpdateTableResult struct {
+	TableDescription *TableDescription
 }
 
 type WriteRequest struct {
+	DeleteRequest *DeleteRequest `json:",omitempty"`
+	PutRequest    *PutRequest    `json:",omitempty"`
 }
 
-type actions interface {
+type DynamoDB interface {
+	Mapping
+
 	BatchGetItem(requestedItems map[string]KeysAndAttributes, options *BatchGetItemOptions) (*BatchGetItemResult, error)
 	BatchWriteItem(requestedItems map[string]WriteRequest, options *BatchWriteItemOptions) (*BatchWriteItemResult, error)
 	CreateTable(tableName string, attributeDefinitions []AttributeDefinition, keySchema []KeySchemaElement, ProvisionedThroughput ProvisionedThroughput, options *CreateTableOptions) (*CreateTableResult, error)
@@ -187,152 +278,4 @@ type actions interface {
 	Scan(tableName string, options *ScanOptions) (*ScanResult, error)
 	UpdateItem(tableName string, key Key, options *UpdateItemOptions) (*UpdateItemResult, error)
 	UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput, options *UpdateTableOptions) (*UpdateTableResult, error)
-}
-
-type DynamoDB interface {
-	actions
-
-	Register(tableName string, i interface{}) (*TableDescription, error)
-	ToItem(s interface{}) Item
-	ToKey(s interface{}) Key
-	FromItem(string, Item) interface{}
-}
-
-type Tables map[string]struct {
-	TableDescription *TableDescription
-	TableType        reflect.Type
-}
-
-func (tt Tables) Register(tableName string, i interface{}) (*TableDescription, error) {
-	tableType := reflect.TypeOf(i).Elem()
-	if t, err := tt.tableFor(tableName, tableType); err == nil {
-		tt[tableName] = struct {
-			TableDescription *TableDescription
-			TableType        reflect.Type
-		}{TableDescription: t, TableType: tableType}
-		return t, nil
-	} else {
-		return nil, err
-	}
-
-}
-
-func (tt Tables) tableFor(tableName string, tableType reflect.Type) (*TableDescription, error) {
-	var primaryHash, primaryRange *KeySchemaElement
-	var attributeDefinitions []AttributeDefinition
-	var keySchema []KeySchemaElement
-	provisionedThroughput := ProvisionedThroughput{1, 1}
-
-	for i := 0; i < tableType.NumField(); i++ {
-		f := tableType.Field(i)
-		attributeType := ""
-		switch f.Type.Kind() {
-		case reflect.String:
-			attributeType = "S"
-		case reflect.Int, reflect.Int64:
-			attributeType = "N"
-		default:
-			return nil, errors.New("attribute type not supported")
-		}
-		name := tableType.Field(i).Name
-
-		tag := f.Tag.Get("db")
-		if tag == "HASH" {
-			attributeDefinitions = append(attributeDefinitions, AttributeDefinition{name, attributeType})
-			primaryHash = &KeySchemaElement{name, "HASH"}
-		}
-		if tag == "RANGE" {
-			attributeDefinitions = append(attributeDefinitions, AttributeDefinition{name, attributeType})
-			primaryRange = &KeySchemaElement{name, "RANGE"}
-		}
-	}
-
-	if primaryHash == nil {
-		return nil, errors.New("no primary key hash specified")
-	} else {
-		keySchema = append(keySchema, *primaryHash)
-	}
-	if primaryRange != nil {
-		keySchema = append(keySchema, *primaryRange)
-	}
-	return &TableDescription{TableName: tableName, KeySchema: keySchema, AttributeDefinitions: attributeDefinitions, ProvisionedThroughput: provisionedThroughput}, nil
-}
-
-func (tt Tables) ToItem(s interface{}) Item {
-	var it Item = make(map[string]AttributeValue)
-	sValue := reflect.ValueOf(s).Elem()
-	typeOfItem := sValue.Type()
-
-	for i := 0; i < sValue.NumField(); i++ {
-		f := sValue.Field(i)
-		name := typeOfItem.Field(i).Name
-		switch f.Type().Kind() {
-		case reflect.String:
-			v := f.Interface().(string)
-			if v != "" {
-				it[name] = map[string]string{"S": v}
-			}
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			s := strconv.FormatInt(f.Int(), 10)
-			it[name] = map[string]string{"N": s}
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-			s := strconv.FormatUint(f.Uint(), 10)
-			it[name] = map[string]string{"N": s}
-		default:
-			panic("attribute type not supported")
-		}
-
-	}
-	return it
-}
-
-func (tt Tables) ToKey(s interface{}) Key {
-
-	key := make(Key)
-
-	sType := reflect.TypeOf(s).Elem()
-	sValue := reflect.ValueOf(s).Elem()
-
-	for i := 0; i < sValue.NumField(); i++ {
-		sf := sType.Field(i)
-		tag := sf.Tag.Get("db")
-		if tag == "HASH" || tag == "RANGE" {
-			fv := sValue.Field(i)
-			switch sf.Type.Kind() {
-			case reflect.String:
-				key[sf.Name] = AttributeValue{"S": fv.Interface().(string)}
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				key[sf.Name] = AttributeValue{"N": strconv.FormatInt(fv.Int(), 10)}
-			default:
-				panic("attribute type not supported")
-			}
-		}
-	}
-	return key
-}
-
-func (tt Tables) FromItem(tableName string, item Item) interface{} {
-	et := tt[tableName].TableType
-	v := reflect.New(et)
-	v = v.Elem()
-	switch v.Kind() {
-	case reflect.Struct:
-		for kk, vv := range item {
-			if value, ok := vv["S"]; ok {
-				f := v.FieldByName(kk)
-				f.SetString(value)
-			}
-			if value, ok := vv["N"]; ok {
-				f := v.FieldByName(kk)
-				n, err := strconv.ParseInt(value, 10, 64)
-				if err != nil || f.OverflowInt(n) {
-					panic(fmt.Sprintf("%v %v\n", value, v.Type()))
-				}
-				f.SetInt(n)
-			}
-		}
-	default:
-		panic("Unsupported item type error")
-	}
-	return v.Addr().Interface()
 }
