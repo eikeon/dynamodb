@@ -103,12 +103,36 @@ RETRY:
 	}
 }
 
-func (db *dynamo) BatchGetItem(requestedItems map[string]KeysAndAttributes, options *BatchGetItemOptions) (*BatchGetItemResult, error) {
-	return nil, errors.New("NYI")
+func (db *dynamo) BatchGetItem(requestItems map[string]KeysAndAttributes, options *BatchGetItemOptions) (*BatchGetItemResult, error) {
+	if reader, err := db.post("BatchGetItem", struct {
+		RequestItems map[string]KeysAndAttributes
+		*BatchGetItemOptions
+	}{requestItems, options}); err == nil {
+		response := &BatchGetItemResult{}
+		if err = json.NewDecoder(reader).Decode(&response); err != nil {
+			return nil, err
+		}
+		reader.Close()
+		return response, nil
+	} else {
+		return nil, err
+	}
 }
 
-func (db *dynamo) BatchWriteItem(requestedItems map[string]WriteRequest, options *BatchWriteItemOptions) (*BatchWriteItemResult, error) {
-	return nil, errors.New("NYI")
+func (db *dynamo) BatchWriteItem(requestItems map[string]WriteRequest, options *BatchWriteItemOptions) (*BatchWriteItemResult, error) {
+	if reader, err := db.post("BatchGetItem", struct {
+		RequestItems map[string]WriteRequest
+		*BatchWriteItemOptions
+	}{requestItems, options}); err == nil {
+		response := &BatchWriteItemResult{}
+		if err = json.NewDecoder(reader).Decode(&response); err != nil {
+			return nil, err
+		}
+		reader.Close()
+		return response, nil
+	} else {
+		return nil, err
+	}
 }
 
 func (db *dynamo) CreateTable(tableName string, attributeDefinitions []AttributeDefinition, keySchema []KeySchemaElement, provisionedThroughput ProvisionedThroughput, options *CreateTableOptions) (*CreateTableResult, error) {
