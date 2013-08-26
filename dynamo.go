@@ -158,7 +158,20 @@ func (db *dynamo) CreateTable(tableName string, attributeDefinitions []Attribute
 }
 
 func (db *dynamo) UpdateItem(tableName string, key Key, options *UpdateItemOptions) (*UpdateItemResult, error) {
-	return nil, errors.New("NYI")
+	if reader, err := db.post("BatchGetItem", struct {
+		TableName string
+		Key       Key
+		*UpdateItemOptions
+	}{tableName, key, options}); err == nil {
+		response := &UpdateItemResult{}
+		if err = json.NewDecoder(reader).Decode(&response); err != nil {
+			return nil, err
+		}
+		reader.Close()
+		return response, nil
+	} else {
+		return nil, err
+	}
 }
 
 func (db *dynamo) UpdateTable(tableName string, provisionedThroughput ProvisionedThroughput, options *UpdateTableOptions) (*UpdateTableResult, error) {
