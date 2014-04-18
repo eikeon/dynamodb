@@ -3,6 +3,7 @@ package dynamodb
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"strconv"
 )
@@ -136,7 +137,11 @@ func (m mapping) FromItem(tableName string, item Item) interface{} {
 		for kk, vv := range item {
 			if value, ok := vv["S"]; ok {
 				f := v.FieldByName(kk)
-				f.SetString(value)
+				if f.CanSet() {
+					f.SetString(value)
+				} else {
+					log.Println("Warning: can't set:", kk)
+				}
 			}
 			if value, ok := vv["N"]; ok {
 				f := v.FieldByName(kk)
