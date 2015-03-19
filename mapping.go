@@ -1,12 +1,16 @@
 package dynamodb
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"reflect"
 	"strconv"
 )
+
+var urlType = reflect.TypeOf(&url.URL{})
 
 type Mapping interface {
 	Register(tableName string, i interface{}) (*TableDescription, error)
@@ -43,13 +47,20 @@ func (m mapping) tableFor(tableName string, tableType reflect.Type) (*TableDescr
 	for i := 0; i < tableType.NumField(); i++ {
 		f := tableType.Field(i)
 		attributeType := ""
-		switch f.Type.Kind() {
-		case reflect.String:
+		switch f.Type {
+		case urlType:
 			attributeType = "S"
-		case reflect.Int, reflect.Int64:
-			attributeType = "N"
 		default:
-			return nil, errors.New("attribute type not supported")
+			switch f.Type.Kind() {
+			case reflect.String:
+				attributeType = "S"
+			case reflect.Int, reflect.Int64:
+				attributeType = "N"
+			case reflect.Slice:
+				attributeType = "B"
+			default:
+				return nil, errors.New("attribute type not supported")
+			}
 		}
 		name := tableType.Field(i).Name
 
@@ -95,6 +106,9 @@ func (m mapping) ToItem(s interface{}) Item {
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 			s := strconv.FormatUint(f.Uint(), 10)
 			it[name] = map[string]string{"N": s}
+		case reflect.Slice:
+			s := base64.StdEncoding.EncodeToString(f.Bytes())
+			it[name] = map[string]string{"B": s}
 		default:
 			panic("attribute type not supported")
 		}
@@ -115,13 +129,22 @@ func (m mapping) ToKey(s interface{}) Key {
 		tag := sf.Tag.Get("db")
 		if tag == "HASH" || tag == "RANGE" {
 			fv := sValue.Field(i)
-			switch sf.Type.Kind() {
-			case reflect.String:
-				key[sf.Name] = AttributeValue{"S": fv.Interface().(string)}
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				key[sf.Name] = AttributeValue{"N": strconv.FormatInt(fv.Int(), 10)}
+			switch sf.Type {
+			case urlType:
+				u := fv.Interface().(*url.URL)
+				key[sf.Name] = AttributeValue{"S": u.String()}
 			default:
-				panic("attribute type not supported")
+				switch sf.Type.Kind() {
+				case reflect.String:
+					key[sf.Name] = AttributeValue{"S": fv.Interface().(string)}
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					key[sf.Name] = AttributeValue{"N": strconv.FormatInt(fv.Int(), 10)}
+				case reflect.Slice:
+					s := base64.StdEncoding.EncodeToString(fv.Bytes())
+					key[sf.Name] = AttributeValue{"B": s}
+				default:
+					panic("attribute type not supported")
+				}
 			}
 		}
 	}
@@ -137,10 +160,18 @@ func (m mapping) FromItem(tableName string, item Item) interface{} {
 		for kk, vv := range item {
 			if value, ok := vv["S"]; ok {
 				f := v.FieldByName(kk)
-				if f.CanSet() {
-					f.SetString(value)
-				} else {
-					log.Println("Warning: can't set:", kk)
+				switch f.Type() {
+				case urlType:
+					log.Print("We have a URL!")
+					if u, err := url.Parse(value); err == nil {
+						f.Set(reflect.ValueOf(u))
+					}
+				default:
+					if f.CanSet() {
+						f.SetString(value)
+					} else {
+						log.Println("Warning: can't set:", kk)
+					}
 				}
 			}
 			if value, ok := vv["N"]; ok {
@@ -150,6 +181,14 @@ func (m mapping) FromItem(tableName string, item Item) interface{} {
 					panic(fmt.Sprintf("%v %v\n", value, v.Type()))
 				}
 				f.SetInt(n)
+			}
+			if value, ok := vv["B"]; ok {
+				f := v.FieldByName(kk)
+				bytes, err := base64.StdEncoding.DecodeString(value)
+				if err != nil {
+					panic(fmt.Sprintf("%v %v\n", value, v.Type()))
+				}
+				f.SetBytes(bytes)
 			}
 		}
 	default:
